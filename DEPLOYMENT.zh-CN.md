@@ -40,6 +40,8 @@ pnpm cloud:provision --import-backup
 
 部署目标是你的 Vercel Hobby 团队，新项目名称 `daily-plan-agent`，Root Directory 为 `apps/web`，Node 为 22，连接上述 GitHub 私有仓库。脚本不会升级付费方案。
 
+`apps/web/vercel.json` 将函数设在新加坡 `sin1`，靠近同区域的 Supabase 数据库；只使用一个区域。
+
 ```powershell
 git push -u origin feat/cloud-mobile-sync
 pnpm cloud:provision --deploy
