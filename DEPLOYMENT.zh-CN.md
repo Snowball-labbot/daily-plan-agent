@@ -42,6 +42,8 @@ pnpm cloud:provision --import-backup
 
 `apps/web/vercel.json` 将函数设在新加坡 `sin1`，靠近同区域的 Supabase 数据库；只使用一个区域。
 
+当前可测试的固定分支网址：[个人计划预览](https://daily-plan-agent-git-feat-cloud-mo-1649da-wus-projects-9aa55391.vercel.app)。该网址保留手机缓存所在的域名，适合首轮手机测试；仅发布预览，main 尚未合并。预览站显示应用自己的登录页，个人记录仍由后端账号校验与 RLS 隔离。
+
 ```powershell
 git push -u origin feat/cloud-mobile-sync
 pnpm cloud:provision --deploy
