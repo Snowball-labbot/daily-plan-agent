@@ -1,0 +1,11 @@
+- insert:
+    - id: dsh-daily-plan
+      name: '@dsh-external/dsh-daily-plan'
+      config:
+        enabled: true
+        timeZone: 'Asia/Shanghai'
+        workspacePath: 'D:/每日计划减少决策'
+        agentPreset: 'standard'
+        provider: 'agnes'
+        model: 'agnes-2.5-flash'
+        reviewTimeoutMinutes: 6
