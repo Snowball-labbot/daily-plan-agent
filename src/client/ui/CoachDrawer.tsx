@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { isoWeekKey, parseIsoDate } from '../../clock.ts'
 import { Icon } from '../icons.tsx'
 import { WorkflowPanel } from './WorkflowPanel.tsx'
+import { usePhoneViewport } from './phoneViewport.ts'
 
 /** One review entry across every page; drafts and requests stay mounted. */
 export function CoachDrawer({ open, onClose, ...props }: Parameters<typeof WorkflowPanel>[0] & { open: boolean; onClose: () => void }): JSX.Element {
   const panel = useRef<HTMLElement | null>(null)
   const previousFocus = useRef<HTMLElement | null>(null)
+  const viewport = usePhoneViewport(props.mobile && open)
   const [end, setEnd] = useState(props.state.snapshot?.todayIso ?? '')
   const [planning, setPlanning] = useState(false)
   useEffect(() => { if (!end && props.state.snapshot?.todayIso) setEnd(props.state.snapshot.todayIso) }, [end, props.state.snapshot?.todayIso])
@@ -15,11 +17,14 @@ export function CoachDrawer({ open, onClose, ...props }: Parameters<typeof Workf
     if (!open) return
     previousFocus.current = document.activeElement as HTMLElement
     setEnd(props.state.snapshot?.todayIso ?? '')
-    const frame = requestAnimationFrame(() => panel.current?.querySelector<HTMLTextAreaElement>('textarea')?.focus())
+    const frame = requestAnimationFrame(() => panel.current?.querySelector<HTMLElement>(props.mobile ? '[data-coach-close]' : 'textarea')?.focus({ preventScroll: true }))
     return () => { cancelAnimationFrame(frame); previousFocus.current?.focus({ preventScroll: true }) }
   }, [open])
   return <div className="dp-coach-overlay" hidden={!open} data-coach-open={open ? 'true' : undefined} onPointerDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <aside className={`dp-coach-drawer dp-scroll${props.mobile?' phone-coach-drawer':''}`} ref={panel} role="dialog" aria-modal="true" aria-label="复盘与联动安排" onKeyDown={(event) => {
+    <aside className={`dp-coach-drawer dp-scroll${props.mobile?' phone-coach-drawer':''}`} ref={panel} style={viewport.style} data-short-viewport={viewport.short || undefined} role="dialog" aria-modal="true" aria-label="复盘与联动安排" onKeyDown={(event) => {
+      // A native detail sheet owns its own focus and Escape key while open.
+      if (panel.current?.querySelector('dialog[open]')) return
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
       if (event.key !== 'Tab') return
       const nodes = [...(panel.current?.querySelectorAll<HTMLElement>('button:not(:disabled),textarea:not(:disabled),input:not(:disabled),select:not(:disabled),summary') ?? [])].filter((node) => node.getClientRects().length > 0)
       const first = nodes[0], last = nodes.at(-1)

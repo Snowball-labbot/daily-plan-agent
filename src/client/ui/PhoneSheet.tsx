@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Icon } from '../icons.tsx'
+import { usePhoneViewport } from './phoneViewport.ts'
 
 export function PhoneSheet({
   title,
@@ -13,15 +14,22 @@ export function PhoneSheet({
   onClose: () => void
 }): JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
+  const viewport = usePhoneViewport()
   useEffect(() => {
     const dialog = ref.current!
+    const previousFocus = document.activeElement as HTMLElement | null
     dialog.showModal()
-    return () => dialog.close()
+    return () => {
+      dialog.close()
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+    }
   }, [])
   return (
     <dialog
       ref={ref}
       className="phone-sheet"
+      style={viewport.style}
+      data-short-viewport={viewport.short || undefined}
       aria-label={title}
       onCancel={onClose}
       onClick={(event) => {

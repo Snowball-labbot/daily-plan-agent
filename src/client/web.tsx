@@ -7,11 +7,14 @@ import { TodayPage } from './pages/Today.tsx'
 import { WeekPage } from './pages/Week.tsx'
 import { GymPage } from './pages/Gym.tsx'
 import { MobileGym } from './pages/MobileGym.tsx'
+import { MobileLearn } from './pages/MobileLearn.tsx'
 import { LearnPage } from './pages/Learn.tsx'
 import { RecordPage } from './pages/Record.tsx'
 import { SettingsPage } from './pages/Settings.tsx'
 import { CoachDrawer } from './ui/CoachDrawer.tsx'
 import { TaskFeedback } from './ui/TaskFeedback.tsx'
+import { MobileAgenda } from './ui/MobileAgenda.tsx'
+import { PhoneSheet } from './ui/PhoneSheet.tsx'
 import type { PlanBlockRecord } from '../domain.ts'
 import { DragLayer } from './drag/DragLayer.tsx'
 import { activeBlock } from '../adaptive.ts'
@@ -43,12 +46,7 @@ function MobileToday({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
     </div>
     {due.length > 0 && <p className="mobile-due"><Icon name="bell" size={14} />今天截止：{due.map(item=>item.title).join('、')}</p>}
     {blocks.length === 0 && <div className="mobile-empty"><Icon name="today" size={28} /><p>今天还没有安排</p><button onClick={() => onTellAgnes?.()}>告诉 Agnes，安排一件想做的事</button></div>}
-    <ol className="mobile-timeline">{blocks.map(block => <li key={block.id} className={`mobile-task dp-block${block.done ? ' is-done' : ''}${next?.id === block.id ? ' is-next' : ''}`} data-cat={block.category} data-color={block.colorKey || undefined}>
-      <div className="mobile-task-time"><b>{formatHm(block.startMinute)}</b><small>{formatHm(block.endMinute)}</small></div>
-      <button className="mobile-task-check" type="button" aria-label={`${block.done ? '取消完成' : '完成'}：${block.title}`} aria-pressed={block.done} onClick={() => void runtime.toggleBlock(todayIso, block.id, !block.done)}><span>{block.done && <Icon name="check" size={12} />}</span></button>
-      <button type="button" className="mobile-task-copy mobile-task-detail" aria-label={`查看记录：${block.title}`} onClick={()=>setFeedback(block)}><div><b>{block.title}</b>{next?.id===block.id && <small>接下来</small>}{(block.executionNote||block.completionProgress!==undefined)&&<Icon name="review" size={12}/>}</div>{block.note && <p>{block.note}</p>}</button>
-      {block.category === 'gym' && <button className="mobile-task-gym" aria-label={`记录训练：${block.title}`} onClick={() => { runtime.setGymDate(block.gymDate ?? todayIso); runtime.setPage('gym') }}><Icon name="gym" size={18} /></button>}
-    </li>)}</ol>
+    <MobileAgenda blocks={blocks} date={todayIso} today={todayIso} nextId={next?.id} runtime={runtime} onSelect={setFeedback} />
     <button className="mobile-add-task" onClick={() => onTellAgnes?.()}><Icon name="plus" size={16} />添加或调整安排</button>
     <div className="mobile-legend" aria-label="任务分类"><span data-category="study">工作与学习</span><span data-category="gym">健康</span><span data-category="life">生活与人际</span></div>
     {feedback&&<TaskFeedback date={todayIso} block={feedback} runtime={runtime} onClose={()=>setFeedback(null)}/>}
@@ -58,11 +56,22 @@ function MobileToday({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
 function MobileWeek({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
   const snapshot = state.snapshot
   const [selected, setSelected] = useState(snapshot?.todayIso ?? '')
+  const [detail, setDetail] = useState<PlanBlockRecord | null>(null)
   if (!snapshot) return <p>正在读取本周安排…</p>
   const dates = weekDates(snapshot.weekKey)
   const date = dates.includes(selected) ? selected : dates[0]!
   const day = snapshot.week.find((item) => item.date === date)
-  return <div className="dp-page mobile-week"><div className="mobile-week-head"><h2>本周安排</h2><button onClick={() => void runtime.setWeek(shiftWeekKey(snapshot.weekKey, -1))} aria-label="上一周">‹</button><span>{dates[0]?.slice(5)} — {dates[6]?.slice(5)}</span><button onClick={() => void runtime.setWeek(shiftWeekKey(snapshot.weekKey, 1))} aria-label="下一周">›</button></div><div className="mobile-dates" role="group" aria-label="选择日期">{dates.map((item, index) => <button key={item} aria-pressed={date === item} onClick={() => setSelected(item)}><small>{['一','二','三','四','五','六','日'][index]}</small><b>{item.slice(8)}</b><i>{snapshot.week.find((entry) => entry.date === item)?.blocks.filter(activeBlock).length ?? 0}项</i></button>)}</div><p className="dp-muted">{calendarLabel(date)}</p><div className="mobile-day-list">{day?.blocks.filter(activeBlock).sort((a,b) => a.startMinute-b.startMinute).map((block) => <div className="dp-block" data-cat={block.category} data-color={block.colorKey || undefined} key={block.id}><span>{formatHm(block.startMinute)}<small>{formatHm(block.endMinute)}</small></span><div><b>{block.title}</b><p>{block.note}</p></div><button aria-label={`${block.done ? '取消完成' : '完成'}：${block.title}`} onClick={() => void runtime.toggleBlock(date, block.id, !block.done)}>{block.done ? '✓' : '○'}</button></div>)}</div>{!day?.blocks.filter(activeBlock).length && <p className="dp-muted">这天还没有安排，留一点余地也很好。</p>}<button className="dp-btn" onClick={() => onTellAgnes?.()}>告诉 Agnes 接下来想做什么</button></div>
+  const blocks = day?.blocks.filter(activeBlock).sort((a,b) => a.startMinute-b.startMinute) ?? []
+  return <section className="mobile-week">
+    <div className="mobile-week-head"><h1>本周</h1><button onClick={() => { setSelected(snapshot.todayIso); void runtime.setWeek(isoWeekKey(parseIsoDate(snapshot.todayIso))) }}>今天</button></div>
+    <div className="phone-week-range"><button onClick={() => void runtime.setWeek(shiftWeekKey(snapshot.weekKey, -1))} aria-label="上一周"><Icon name="chevronLeft" size={18}/></button><span>{dates[0]?.slice(5)} — {dates[6]?.slice(5)}</span><button onClick={() => void runtime.setWeek(shiftWeekKey(snapshot.weekKey, 1))} aria-label="下一周"><Icon name="chevronRight" size={18}/></button></div>
+    <div className="mobile-dates" role="group" aria-label="选择日期">{dates.map((item, index) => <button key={item} aria-label={`${item} 周${['一','二','三','四','五','六','日'][index]}`} aria-pressed={date === item} data-today={item === snapshot.todayIso || undefined} onClick={() => { setSelected(item); setDetail(null) }}><small>{['一','二','三','四','五','六','日'][index]}</small><b>{item.slice(8)}</b><i>{snapshot.week.find(entry => entry.date === item)?.blocks.filter(activeBlock).length ?? 0}项</i></button>)}</div>
+    <div className="phone-week-day"><span>{calendarLabel(date) || `${parseIsoDate(date).getMonth()+1}月${parseIsoDate(date).getDate()}日`}</span><span>{blocks.length} 项安排</span></div>
+    <MobileAgenda blocks={blocks} date={date} today={snapshot.todayIso} runtime={runtime} onSelect={setDetail}/>
+    {!blocks.length && <p className="phone-section-empty">这天还没有安排。</p>}
+    <button className="mobile-add-task" onClick={() => onTellAgnes?.()}><Icon name="plus" size={16}/>添加或调整安排</button>
+    {detail && (date <= snapshot.todayIso ? <TaskFeedback date={date} block={detail} runtime={runtime} onClose={() => setDetail(null)}/> : <PhoneSheet title={detail.title} onClose={() => setDetail(null)} footer={<button className="phone-primary" onClick={() => { setDetail(null); onTellAgnes?.(`调整 ${date} ${formatHm(detail.startMinute)}–${formatHm(detail.endMinute)} 的「${detail.title}」：`) }}>告诉 Agnes 调整</button>}><p>{date} · {formatHm(detail.startMinute)}–{formatHm(detail.endMinute)}</p>{detail.note && <p>{detail.note}</p>}</PhoneSheet>)}
+  </section>
 }
 export function PlannerWeb({ owner, email, onLogout }: { owner: string; email: string; onLogout: () => Promise<void> }): JSX.Element {
   const [status, setStatus] = useState('连接中…')
@@ -88,7 +97,7 @@ export function PlannerWeb({ owner, email, onLogout }: { owner: string; email: s
     return () => { uninstall();mobileStyles.remove(); media.removeEventListener('change', resize); window.removeEventListener('online', synchronize) }
   }, [runtime, rpc])
   const tell = (text?: string) => { if (text?.trim()) setComposeRequest({ id: crypto.randomUUID(), text, ...(state.snapshot ? { date: state.snapshot.todayIso } : {}) }); setCoachOpen(true) }
-  const Current = phone && state.page === 'today' ? MobileToday : phone && state.page === 'week' ? MobileWeek : phone && state.page === 'gym' ? MobileGym : pages[state.page] ?? TodayPage
+  const Current = phone && state.page === 'today' ? MobileToday : phone && state.page === 'week' ? MobileWeek : phone && state.page === 'gym' ? MobileGym : phone && state.page === 'learn' ? MobileLearn : pages[state.page] ?? TodayPage
   const headerDate = state.snapshot ? parseIsoDate(state.snapshot.todayIso) : null
   const migrate = async (preview: boolean, file = backup) => {
     setMigrationBusy(true)

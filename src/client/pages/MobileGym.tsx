@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ExerciseRecord, GymItemRecord, GymSessionRecord } from '../../domain.ts'
+import type {
+  ExerciseRecord,
+  GymItemRecord,
+  GymSessionRecord,
+} from '../../domain.ts'
 import { addDays, isoDate, parseIsoDate } from '../../clock.ts'
 import { gymSetFromFields, loggedSets } from '../../gym.ts'
 import { Icon } from '../icons.tsx'
 import { PhoneSheet } from '../ui/PhoneSheet.tsx'
 import type { PageProps } from './types.ts'
 
-export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.Element {
+export function MobileGym({
+  state,
+  runtime,
+  onTellAgnes,
+  t,
+}: PageProps): JSX.Element {
   const snapshot = state.snapshot,
     date = state.gymDate ?? snapshot?.todayIso ?? ''
   const [session, setSession] = useState<GymSessionRecord | null>(null),
@@ -18,6 +27,8 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
     [menu, setMenu] = useState(false),
     [finish, setFinish] = useState(false)
   const [patch, setPatch] = useState({ sets: '', reps: '', weight: '' })
+  const [added, setAdded] = useState<Record<string, number>>({})
+  const [operationError, setOperationError] = useState('')
   useEffect(() => {
     let active = true
     void runtime
@@ -30,14 +41,17 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
       active = false
     }
   }, [date, snapshot?.nowIso, runtime])
-  if (!snapshot || !session || session.date !== date) return <p className="mobile-loading">正在读取训练…</p>
+  if (!snapshot || !session || session.date !== date)
+    return <p className="mobile-loading">正在读取训练…</p>
   const perform = async (action: () => Promise<unknown>) => {
     setBusy(true)
+    setOperationError('')
     try {
       await action()
       setSession(await runtime.gymSession(date))
       return true
     } catch (error) {
+      setOperationError(String(error))
       runtime.notify(String(error))
       return false
     } finally {
@@ -51,6 +65,7 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
       item.name.toLowerCase().includes(search.toLowerCase()),
   )
   const choose = (item: GymItemRecord) => {
+    setOperationError('')
     setPatch({ sets: String(item.sets), reps: item.reps, weight: item.weight })
     setEditing(item)
   }
@@ -58,7 +73,13 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
     <section className="phone-gym" aria-label="训练">
       <header className="phone-gym-heading">
         <h1>训练</h1>
-        <button disabled={!session.items.length || busy} onClick={() => setFinish(true)}>
+        <button
+          disabled={!session.items.length || busy}
+          onClick={() => {
+            setOperationError('')
+            setFinish(true)
+          }}
+        >
           结束训练
           <Icon name="check" size={14} />
         </button>
@@ -66,7 +87,9 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
       <div className="phone-gym-date">
         <button
           aria-label="前一天"
-          onClick={() => runtime.setGymDate(isoDate(addDays(parseIsoDate(date), -1)))}
+          onClick={() =>
+            runtime.setGymDate(isoDate(addDays(parseIsoDate(date), -1)))
+          }
         >
           <Icon name="chevronLeft" size={18} />
         </button>
@@ -74,11 +97,15 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
           type="date"
           aria-label="训练日期"
           value={date}
-          onChange={(event) => event.target.value && runtime.setGymDate(event.target.value)}
+          onChange={(event) =>
+            event.target.value && runtime.setGymDate(event.target.value)
+          }
         />
         <button
           aria-label="后一天"
-          onClick={() => runtime.setGymDate(isoDate(addDays(parseIsoDate(date), 1)))}
+          onClick={() =>
+            runtime.setGymDate(isoDate(addDays(parseIsoDate(date), 1)))
+          }
         >
           <Icon name="chevronRight" size={18} />
         </button>
@@ -98,13 +125,21 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
           </button>
           <button
             disabled={busy}
-            onClick={() => void perform(() => runtime.applyLastGym(date, null)).then(() => setMenu(false))}
+            onClick={() =>
+              void perform(() => runtime.applyLastGym(date, null)).then(() =>
+                setMenu(false),
+              )
+            }
           >
             套用上次训练
           </button>
           <button
             disabled={busy}
-            onClick={() => void perform(() => runtime.queueGymSession(date)).then(() => setMenu(false))}
+            onClick={() =>
+              void perform(() => runtime.queueGymSession(date)).then(() =>
+                setMenu(false),
+              )
+            }
           >
             加入任务池
           </button>
@@ -121,7 +156,8 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
       <div className="phone-gym-summary">
         <span>{session.items.length} 个动作</span>
         <span>
-          {loggedSets(session.items)}/{session.items.reduce((n, item) => n + item.sets, 0)} 组
+          {loggedSets(session.items)}/
+          {session.items.reduce((n, item) => n + item.sets, 0)} 组
           {session.finishedAt ? ' · 已结束' : ''}
         </span>
       </div>
@@ -138,8 +174,17 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
           />
         ))}
       </div>
-      {!session.items.length && <p className="phone-gym-empty">添加动作，开始今天的训练。</p>}
-      <button className="phone-add-exercise" onClick={() => setPicker(true)}>
+      {!session.items.length && (
+        <p className="phone-gym-empty">添加动作，开始今天的训练。</p>
+      )}
+      <button
+        className="phone-add-exercise"
+        onClick={() => {
+          setAdded({})
+          setOperationError('')
+          setPicker(true)
+        }}
+      >
         <Icon name="plus" size={18} />
         添加动作
       </button>
@@ -148,21 +193,54 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
         <Icon name="chevronRight" size={14} />
       </button>
       {picker && (
-        <PhoneSheet title="添加动作" onClose={() => setPicker(false)}>
-          <input
-            className="phone-search"
-            type="search"
-            placeholder="搜索动作"
-            aria-label="搜索动作"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <div className="phone-part-tabs">
-            {['all', 'chest', 'back', 'legs', 'shoulders', 'core', 'cardio'].map((key) => (
-              <button key={key} aria-pressed={part === key} onClick={() => setPart(key)}>
-                {key === 'all' ? '全部' : t(`common.part.${key}`)}
-              </button>
-            ))}
+        <PhoneSheet
+          title="添加动作"
+          onClose={() => setPicker(false)}
+          footer={
+            <button className="phone-primary" onClick={() => setPicker(false)}>
+              完成
+              {Object.values(added).length > 0
+                ? ` · 已添加 ${Object.values(added).reduce((sum, n) => sum + n, 0)} 个动作`
+                : ''}
+            </button>
+          }
+        >
+          <p className="phone-picker-hint" role="status">
+            点击动作加入训练，可连续添加。
+          </p>
+          {operationError && (
+            <p className="phone-danger" role="alert">
+              {operationError}
+            </p>
+          )}
+          <div className="phone-picker-controls">
+            <input
+              className="phone-search"
+              type="search"
+              placeholder="搜索动作"
+              aria-label="搜索动作"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <div className="phone-part-tabs">
+              {[
+                'all',
+                'chest',
+                'back',
+                'legs',
+                'shoulders',
+                'core',
+                'cardio',
+              ].map((key) => (
+                <button
+                  key={key}
+                  aria-pressed={part === key}
+                  onClick={() => setPart(key)}
+                >
+                  {key === 'all' ? '全部' : t(`common.part.${key}`)}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="phone-exercise-library">
             {library.map((exercise: ExerciseRecord) => (
@@ -170,8 +248,14 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
                 key={exercise.id}
                 disabled={busy}
                 onClick={() =>
-                  void perform(() => runtime.addGymItem(date, exercise.id)).then((ok) => {
-                    if (ok) runtime.notify(`已添加 ${exercise.name}`)
+                  void perform(() =>
+                    runtime.addGymItem(date, exercise.id),
+                  ).then((ok) => {
+                    if (ok)
+                      setAdded((current) => ({
+                        ...current,
+                        [exercise.id]: (current[exercise.id] ?? 0) + 1,
+                      }))
                   })
                 }
               >
@@ -182,7 +266,15 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
                     {exercise.equipment && ` · ${exercise.equipment}`}
                   </small>
                 </span>
-                <Icon name="plus" size={18} />
+                {added[exercise.id] ? (
+                  <span className="phone-picker-added">
+                    <Icon name="check" size={14} />
+                    已加入
+                    {added[exercise.id]! > 1 ? ` ×${added[exercise.id]}` : ''}
+                  </span>
+                ) : (
+                  <Icon name="plus" size={18} />
+                )}
               </button>
             ))}
           </div>
@@ -214,6 +306,11 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
           }
         >
           <div className="phone-edit-fields">
+            {operationError && (
+              <p className="phone-danger" role="alert">
+                {operationError}
+              </p>
+            )}
             <label>
               计划组数
               <input
@@ -221,21 +318,27 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
                 min={1}
                 max={30}
                 value={patch.sets}
-                onChange={(event) => setPatch({ ...patch, sets: event.target.value })}
+                onChange={(event) =>
+                  setPatch({ ...patch, sets: event.target.value })
+                }
               />
             </label>
             <label>
               目标次数
               <input
                 value={patch.reps}
-                onChange={(event) => setPatch({ ...patch, reps: event.target.value })}
+                onChange={(event) =>
+                  setPatch({ ...patch, reps: event.target.value })
+                }
               />
             </label>
             <label>
               参考重量
               <input
                 value={patch.weight}
-                onChange={(event) => setPatch({ ...patch, weight: event.target.value })}
+                onChange={(event) =>
+                  setPatch({ ...patch, weight: event.target.value })
+                }
               />
             </label>
           </div>
@@ -270,7 +373,9 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
               className="phone-danger"
               disabled={busy}
               onClick={() =>
-                void perform(() => runtime.removeGymItem(date, editing.id)).then((ok) => {
+                void perform(() =>
+                  runtime.removeGymItem(date, editing.id),
+                ).then((ok) => {
                   if (ok) setEditing(null)
                 })
               }
@@ -298,8 +403,14 @@ export function MobileGym({ state, runtime, onTellAgnes, t }: PageProps): JSX.El
             </button>
           }
         >
+          {operationError && (
+            <p className="phone-danger" role="alert">
+              {operationError}
+            </p>
+          )}
           <p>
-            已记录 {loggedSets(session.items)} 组。每组实际重量与次数会保留；没有填写的组不会变成训练成绩。
+            已记录 {loggedSets(session.items)}{' '}
+            组。每组实际重量与次数会保留；没有填写的组不会变成训练成绩。
           </p>
           <button
             className="phone-gym-tell"
@@ -330,10 +441,13 @@ function MobileExercise({
   onEdit: () => void
   onSaved: () => void
 }): JSX.Element {
-  const unit = item.actualSets?.at(-1)?.unit ?? (/lb/i.test(item.weight) ? 'lb' : 'kg')
+  const unit =
+    item.actualSets?.at(-1)?.unit ?? (/lb/i.test(item.weight) ? 'lb' : 'kg')
   const [reps, setReps] = useState(String(item.actualSets?.at(-1)?.reps ?? '')),
     [weight, setWeight] = useState(
-      String(item.actualSets?.at(-1)?.weight ?? item.weight.replace(/kg|lb/gi, '')),
+      String(
+        item.actualSets?.at(-1)?.weight ?? item.weight.replace(/kg|lb/gi, ''),
+      ),
     ),
     [busy, setBusy] = useState(false)
   const id = useRef<string | null>(null)
@@ -346,7 +460,12 @@ function MobileExercise({
     setBusy(true)
     id.current ??= crypto.randomUUID()
     try {
-      await runtime.call('gym.set.log', { date, itemId: item.id, set, requestId: id.current })
+      await runtime.call('gym.set.log', {
+        date,
+        itemId: item.id,
+        set,
+        requestId: id.current,
+      })
       id.current = null
       onSaved()
       await runtime.refresh()
@@ -365,7 +484,13 @@ function MobileExercise({
             {item.sets}组 · {item.reps}次
           </span>
         </button>
-        <span className="phone-exercise-count">
+        <span
+          className="phone-exercise-count"
+          data-complete={
+            (item.actualSets?.length ?? 0) >= item.sets || undefined
+          }
+          aria-label={`已记录 ${item.actualSets?.length ?? 0} 组，共 ${item.sets} 组`}
+        >
           {item.actualSets?.length ?? 0}/{item.sets}
         </span>
         <button aria-label={`调整${item.name}`} onClick={onEdit}>

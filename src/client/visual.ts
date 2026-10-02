@@ -59,6 +59,7 @@ body[data-ds-dark-theme] .dp-root{--dsw-alias-label-primary:#eee;--dsw-alias-lab
 .dp-coach-output[hidden]{display:none!important}
 .dp-coach-drawer:has(.dp-workflow--workspace){height:min(680px,calc(100% - 12px));display:flex;flex-direction:column;overflow:hidden;width:min(660px,100%);padding:18px 22px}
 .dp-coach-drawer:has(.dp-workflow--workspace)>header{flex-shrink:0;margin-bottom:10px;padding-bottom:6px;min-height:30px}
+.dp-coach-content{display:contents}
 .dp-workflow--workspace{flex:1;min-height:0;gap:12px;margin:0}
 .dp-workflow--workspace .dp-coach-compose{flex-shrink:0}.dp-workflow--workspace .dp-composer textarea{height:148px;min-height:148px;max-height:148px;resize:none;font-size:13px;line-height:1.7}
 .dp-workflow--workspace .dp-coach-modes{margin-bottom:10px}.dp-workflow--workspace .dp-workflow-focus{display:none}.dp-workflow--workspace .dp-range-options,.dp-workflow--workspace .dp-future-range,.dp-workflow--workspace .dp-review-range{min-height:26px;margin-bottom:8px}

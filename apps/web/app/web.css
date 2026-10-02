@@ -109,3 +109,96 @@
 
 .mobile-task-detail{background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;min-width:0;min-height:44px}.mobile-task-detail>div>svg{color:#999;flex:none}.phone-progress-field{display:flex;align-items:center;gap:10px}.phone-progress-field input{flex:1;width:0}.phone-progress-field span{color:#999;font-size:15px}
 .dp-execution-detail{font-size:11px;color:#777;margin-top:5px}.dp-execution-detail summary{cursor:pointer}.dp-execution-detail p{font-size:12px;line-height:1.6;margin:6px 0}
+
+/* Phone interaction pass: visible-screen panels and compact, tappable progress. */
+.dp-coach-content{display:contents}
+.phone-sheet{bottom:var(--phone-visible-bottom,0px);max-height:min(85dvh,calc(var(--phone-visible-height,100dvh) - 12px))}
+.phone-sheet[data-short-viewport]{border-radius:12px 12px 0 0}
+.phone-sheet[data-short-viewport]>footer{padding-bottom:10px}
+.phone-sheet small{color:#737373;line-height:1.6}
+.phone-sheet button:disabled{cursor:default}
+.phone-sheet button:focus-visible,.phone-sheet input:focus-visible,.phone-sheet textarea:focus-visible{outline:2px solid #606060;outline-offset:2px}
+.phone-picker-hint{font-size:12px;margin:0 0 12px;color:#737373}
+.phone-picker-controls{position:sticky;top:-16px;z-index:1;padding-top:16px;background:#fff}
+.phone-exercise-library .phone-picker-added{display:flex;align-items:center;gap:4px;color:#308556;font-size:12px;white-space:nowrap;padding-left:8px}
+.phone-learning-settings summary{min-height:44px;display:flex;align-items:center;color:#666;font-size:13px;cursor:pointer;gap:8px}
+.phone-learning-settings summary::after{content:'⌄';margin-left:auto}
+.phone-learning-settings[open] summary::after{transform:rotate(180deg)}
+.phone-learning-settings>div{padding:8px 0}
+.phone-edit-fields>small{font-size:12px}
+@media(max-width:700px){
+  .dp-web{--phone-pad:18px;--phone-meta:#737373}
+  .dp-web .web-more summary{width:44px}
+  .dp-web button:disabled{cursor:default}
+  .dp-web .mobile-task-copy b{font-size:15px}
+  .dp-web .mobile-task-copy p{color:var(--phone-meta);font-size:12px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+  .dp-web .mobile-task-time small{color:#858585;font-size:11px}
+  .dp-web .mobile-legend{font-size:11px}
+  .dp-web .mobile-nav button{font-size:11px}
+  .dp-web .phone-coach-drawer:has(.dp-workflow--workspace){position:fixed;top:var(--phone-visible-top,0px);left:0;height:var(--phone-visible-height,100dvh);padding-bottom:calc(10px + env(safe-area-inset-bottom));overflow:hidden}
+  .dp-web .phone-coach-content{display:flex;flex-direction:column;flex:1;min-height:0;gap:12px}
+  .dp-web .phone-coach-content .dp-coach-compose{flex:none}
+  .dp-web .phone-coach-content .dp-agent-plan{flex:1;min-height:0}
+  .dp-web .phone-coach-drawer[data-short-viewport]>header{min-height:44px;margin-bottom:4px}
+  .dp-web .phone-coach-drawer[data-short-viewport]>header [data-coach-close]{top:0}
+  .dp-web .phone-coach-drawer[data-short-viewport]{padding-top:0;padding-bottom:8px}
+  .dp-web .phone-coach-drawer[data-short-viewport] .phone-coach-content{overflow-y:auto;overscroll-behavior:contain;display:block}
+  .dp-web .phone-coach-drawer[data-short-viewport] .dp-agent-plan{overflow:visible;margin-top:12px}
+  .dp-web .phone-coach-drawer[data-short-viewport] .dp-agent-plan-scroll{overflow:visible;max-height:none}
+  .dp-web .phone-coach-drawer[data-short-viewport] .dp-agent-workspace-footer{background:#fff;padding-top:8px}
+  .dp-web .phone-coach-tabs>button{min-height:40px;font-size:14px}
+  .dp-web .phone-coach-scope{flex-wrap:wrap}
+  .dp-web .phone-coach-scope select,.dp-web .phone-coach-scope input[type=date],.dp-web .dp-workflow--phone .dp-future-range select,.dp-web .dp-workflow--phone .dp-future-range input[type=date]{font-size:16px;min-height:44px}
+  .dp-web .phone-coach-scope select{max-width:140px}
+  .dp-web .phone-coach-scope select,.dp-web .dp-workflow--phone .dp-future-range select{appearance:none;-webkit-appearance:none;padding-right:22px;background-image:linear-gradient(45deg,transparent 50%,#777 50%),linear-gradient(135deg,#777 50%,transparent 50%);background-position:calc(100% - 10px) 20px,calc(100% - 6px) 20px;background-size:4px 4px;background-repeat:no-repeat}
+  .dp-web .phone-coach-scope input[type=date]{width:145px}
+  .dp-web .dp-workflow--phone .dp-replace-option{min-height:44px;font-size:12px;line-height:1.5}
+  .dp-web .dp-workflow--phone .dp-agent-workspace-status{font-size:11px}
+  .dp-web .phone-coach-drawer[data-short-viewport] .dp-composer textarea{height:110px;min-height:110px;max-height:110px}
+  .dp-web .phone-gym{padding:10px var(--phone-pad) 24px}
+  .dp-web .phone-gym-heading h1,.phone-learn h1{font-size:25px;font-weight:600;letter-spacing:-.6px;margin:0}
+  .dp-web .phone-gym-date>button{width:44px}
+  .dp-web .phone-gym-date input{font-size:16px;min-height:44px}
+  .dp-web .phone-exercise{padding:4px 0 10px}
+  .dp-web .phone-exercise-head>button{min-height:44px}
+  .dp-web .phone-exercise-head>button:first-child{align-items:flex-start;flex-direction:column;justify-content:center;gap:1px}
+  .dp-web .phone-exercise-head>button:last-child{width:44px;flex:none}
+  .dp-web .phone-exercise-head b{max-width:100%}
+  .dp-web .phone-exercise-head span{color:var(--phone-meta);font-size:12px}
+  .dp-web .phone-exercise-count[data-complete]{color:#308556}
+  .dp-web .phone-gym-options button,.phone-part-tabs button{min-height:44px}
+  .dp-web .phone-gym-tell{color:var(--phone-meta);font-size:12px;line-height:1.6;gap:8px}
+  .dp-web .phone-gym-tell svg{flex:none}
+  .phone-learn{padding:10px var(--phone-pad) 24px}
+  .phone-learn-heading{display:flex;align-items:center;justify-content:space-between}
+  .phone-learn-heading>button{border:0;background:none;display:flex;align-items:center;gap:6px;min-height:44px;font-size:12px;color:#666}
+  .phone-learn-overview{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 18px;font-size:12px;color:#737373;line-height:1.6}
+  .phone-learn-section{margin-bottom:18px}
+  .phone-learn-section>header{display:flex;align-items:center;justify-content:space-between;min-height:44px}
+  .phone-learn-section h2{font-size:14px;font-weight:600;margin:0}
+  .phone-learn-section>header>button{border:0;background:none;width:44px;height:44px;display:grid;place-items:center;color:#737373}
+  .dp-web .phone-learn-row{width:100%;padding:12px 0;min-height:82px;display:flex;align-items:center;gap:12px;border:0;border-bottom:1px solid #eee;border-radius:0;background:#fff;box-shadow:none;color:#252525;text-align:left}
+  .phone-learn-emblem{width:34px;height:40px;display:grid;place-items:center;color:var(--dp-accent);background:var(--dp-accent-soft);border-radius:6px;flex:none}
+  .phone-learn-copy{display:grid;gap:5px;flex:1;min-width:0}
+  .phone-learn-copy>b{font-size:15px;font-weight:500;line-height:1.5;overflow-wrap:anywhere}
+  .phone-learn-copy>small{font-size:12px;color:#737373;display:flex;gap:10px;flex-wrap:wrap;line-height:1.4}
+  .phone-learn-progress{height:3px;border-radius:2px;background:#f1f1f1;overflow:hidden;margin-top:2px}
+  .phone-learn-progress>i{display:block;height:100%;background:var(--dp-accent)}
+  .phone-learn-row>svg{color:#aaa;flex:none}
+  .phone-section-empty{font-size:13px;color:#737373;line-height:1.6;margin:8px 0 16px}
+  .phone-learn-finished>summary{min-height:44px;line-height:44px;font-size:13px;color:#737373;cursor:pointer}
+  .dp-web .mobile-week{padding:10px var(--phone-pad) 24px}
+  .dp-web .mobile-week-head{justify-content:space-between}
+  .dp-web .mobile-week-head h1{font-size:25px;font-weight:600;letter-spacing:-.6px;margin:0}
+  .dp-web .mobile-week-head>button{min-width:44px;min-height:44px;font-size:12px;color:#666}
+  .phone-week-range{display:flex;align-items:center;justify-content:space-between;margin:6px 0 0;color:#737373;font-size:12px}
+  .phone-week-range>button{display:grid;place-items:center;width:44px;height:44px;background:none;border:0;color:#737373}
+  .dp-web .mobile-dates{margin:0 0 16px;gap:3px}
+  .dp-web .mobile-dates button{min-height:68px;gap:5px;padding:8px 0}
+  .dp-web .mobile-dates button[aria-pressed=true]{background:#f4f4f4;color:#222}
+  .dp-web .mobile-dates button[data-today] b{text-decoration:underline;text-underline-offset:4px}
+  .dp-web .mobile-dates small,.dp-web .mobile-dates i{font-size:11px}
+  .dp-web .mobile-dates b{font-size:16px;font-weight:500}
+  .phone-week-day{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#737373;min-height:32px;margin-bottom:4px}
+}
+@media(max-width:360px){.dp-web .mobile-dates{margin-left:-18px;margin-right:-18px;gap:0}}
