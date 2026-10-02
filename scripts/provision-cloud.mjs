@@ -66,7 +66,7 @@ if(settings.SUPABASE_ACCESS_TOKEN) {
     user=await rest('/auth/v1/admin/users','POST',{email:owner,password:accountPassword,email_confirm:true})
   }
   receipt.account={id:user.id,email:owner};await checkpoint()
-  cloudEnv={SUPABASE_URL:dbUrl,SUPABASE_ANON_KEY:anon,SUPABASE_SERVICE_ROLE_KEY:service,OWNER_EMAIL:owner,AGNES_BASE_URL:'https://apihub.agnes-ai.com/v1',AGNES_MODEL:'agnes-2.5-flash',AGNES_API_KEY:settings.AGNES_API_KEY ?? ''}
+  cloudEnv={SUPABASE_URL:dbUrl,SUPABASE_ANON_KEY:anon,SUPABASE_SERVICE_ROLE_KEY:service,OWNER_EMAIL:owner,AGNES_BASE_URL:settings.AGNES_BASE_URL ?? 'https://apihub.agnes-ai.com/v1',AGNES_MODEL:'agnes-2.5-flash',AGNES_API_KEY:settings.AGNES_API_KEY ?? '',ENABLE_EXPERIMENTAL_COREPACK:'1'}
   await writeFile(path.join(root,'apps/web/.env.local'),Object.entries(cloudEnv).map(([key,value])=>`${key}=${value}`).join('\n')+'\n')
   console.log('数据库结构和个人账号已建立；密钥保存在 apps/web/.env.local，未输出或上传 Git。')
   if(process.argv.includes('--import-backup')) {
@@ -99,6 +99,7 @@ if(vercelToken) {
   const list=await vercel('/v9/projects')
   let project=list.projects?.find(item=>item.name==='daily-plan-agent')
   if(!project)project=await vercel('/v11/projects','POST',{name:'daily-plan-agent',framework:'nextjs',rootDirectory:'apps/web',nodeVersion:'22.x',gitRepository:{type:'github',repo:'Snowball-labbot/daily-plan-agent'},installCommand:'corepack enable && pnpm install --frozen-lockfile',buildCommand:'pnpm run build'})
+  project=await vercel(`/v9/projects/${project.id}`,'PATCH',{framework:'nextjs',rootDirectory:'apps/web',nodeVersion:'22.x',sourceFilesOutsideRootDirectory:true,installCommand:'corepack enable && pnpm install --frozen-lockfile',buildCommand:'pnpm run build',outputDirectory:null})
   receipt.vercel={id:project.id,team,url:`https://vercel.com/wus-projects-9aa55391/${project.name}`};await checkpoint()
   if(!cloudEnv) { try {cloudEnv=env(await readFile(path.join(root,'apps/web/.env.local'),'utf8'))}catch{} }
   if(cloudEnv) {

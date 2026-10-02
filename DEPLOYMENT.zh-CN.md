@@ -21,9 +21,12 @@ SUPABASE_PROJECT_REF=ykmzzeyxifzulluygmbx
 SUPABASE_ACCESS_TOKEN=
 VERCEL_TOKEN=
 AGNES_API_KEY=
+AGNES_BASE_URL=https://api.agnes-ai.cn/v1
 ```
 
 Supabase Personal Access Token 在 https://supabase.com/dashboard/account/tokens 创建；`sb_secret_` 是项目服务端密钥，不能替代管理 Token。Vercel 可使用 `pnpm dlx vercel@latest login` 完成设备登录，或填写自己的 Vercel Token。不要把密钥发到聊天。
+
+当前账号使用 Agnes 国内站，对应 `https://api.agnes-ai.cn/v1`；国际站对应 `https://apihub.agnes-ai.com/v1`。部署脚本读取 `AGNES_BASE_URL`，不会因 401 自动轮换服务线路。
 
 ```powershell
 pnpm install --frozen-lockfile
