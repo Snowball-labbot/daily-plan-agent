@@ -7,7 +7,9 @@ import WebKit
 struct PhoneView: View {
     @EnvironmentObject var store: PhoneStore
     @State private var url=UserDefaults.standard.string(forKey:"planner-url") ?? ""
-    @State private var email="",password="",text=""
+    @State private var email=""
+    @State private var password=""
+    @State private var text=""
     @State private var showWebsite=false
     @State private var showAccount=false
     @State private var remember=true
