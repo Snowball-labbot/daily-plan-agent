@@ -182,7 +182,7 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
       {!unified && error && <div className="dp-error" role="alert">{error}</div>}
     </div>
     {unified ? <>
-      <AgentPlanPanel run={latest ?? null} busy={busy} operation={operation} dirty={!!manualEdits} allocation={allocation} context={context} runtime={runtime} onChange={setManualEdits} onNavigate={onNavigate} />
+      <AgentPlanPanel run={latest ?? null} mobile={mobile} busy={busy} operation={operation} dirty={!!manualEdits} allocation={allocation} context={context} runtime={runtime} onChange={setManualEdits} onNavigate={onNavigate} />
       <footer className="dp-agent-workspace-footer">
         <div className="dp-agent-workspace-status" role={error ? 'alert' : 'status'} title={error ?? ''}>{error ?? (manualEdits ? '改好后保存即可，不需要再问 AI。' : '直接说，或在上方改时间和描述。')}
           {busy && operation === 'generating' && <button type="button" onClick={() => { if (activeJob.current) void runtime.call('workflow.cancel', { id: activeJob.current }) }}>停止整理</button>}

@@ -160,6 +160,9 @@ export function registerDailyPlanRpc(ctx: Context, service: DailyPlanService, cl
             ),
           )
         }
+        if (endpoint === 'plan.block.feedback') {
+          return ok(await service.feedbackBlock(str(payload['date'],'date'),str(payload['blockId'],'blockId'),payload))
+        }
         if (endpoint === 'plan.block.reorder-day') {
           return ok(
             await service.reorderDay(str(payload['date'], 'date'), list(payload['orderedIds'], 'orderedIds')),

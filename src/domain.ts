@@ -76,8 +76,10 @@ export const PlanBlockSchema = z.object({
   learningRef: z.string().nullable().optional(),
   learningKind: z.enum(['reading', 'practice']).nullable().optional(),
   lifeArea: LifeArea.optional(),
-  executionStatus: z.enum(['unknown', 'missed', 'completed']).optional(),
+  executionStatus: z.enum(['unknown', 'missed', 'completed', 'partial']).optional(),
   completionEvidence: z.string().optional(),
+  completionProgress: z.number().int().min(0).max(100).optional(),
+  executionNote: z.string().max(2000).optional(),
 })
 
 export const DayPlanSchema = z.object({

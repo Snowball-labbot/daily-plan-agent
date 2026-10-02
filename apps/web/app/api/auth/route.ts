@@ -5,12 +5,12 @@ export async function GET(request: Request) { try { const user = await getOwner(
 export async function POST(request: Request) {
   try {
     checkOrigin(request)
-    const { email, password } = await request.json()
+    const { email, password, remember } = await request.json()
     if (typeof email !== 'string' || email.toLowerCase() !== config('OWNER_EMAIL').toLowerCase() || typeof password !== 'string') throw new Error('账号或密码不正确')
     const { data, error } = await authClient().auth.signInWithPassword({ email, password })
     if (error || !data.session) throw new Error('账号或密码不正确')
-    await saveSession(data.session)
+    await saveSession(data.session, remember === true)
     return Response.json({ ok: true, value: { id: data.user.id, email: data.user.email } })
   } catch (error) { return failure(error) }
 }
-export async function DELETE(request: Request) { try { checkOrigin(request); const jar = await cookies(); jar.delete('planner_access'); jar.delete('planner_refresh'); return Response.json({ ok: true }) } catch (error) { return failure(error) } }
+export async function DELETE(request: Request) { try { checkOrigin(request); const jar = await cookies(); jar.delete('planner_access'); jar.delete('planner_refresh'); jar.delete('planner_remember'); return Response.json({ ok: true }) } catch (error) { return failure(error) } }

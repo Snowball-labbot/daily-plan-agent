@@ -40,7 +40,7 @@ export function createHttpRpc(owner: string, onStatus: (text: string) => void): 
     return syncing
   }
   async function pendingValue(endpoint: string, data: any) {
-    if(endpoint === 'plan.block.toggle') {
+    if(endpoint === 'plan.block.toggle' || endpoint === 'plan.block.feedback') {
       const db=await database
       const entries=await new Promise<{key:IDBValidKey;value:any}[]>((resolve,reject)=>{
         const rows:{key:IDBValidKey;value:any}[]=[]
@@ -51,7 +51,11 @@ export function createHttpRpc(owner: string, onStatus: (text: string) => void): 
       for(const {key,value} of entries) {
         if(!value?.ok)continue
         const days=[value.value.today,...(value.value.week ?? [])]
-        for(const day of days)if(day?.date===data.date)for(const block of day.blocks ?? [])if(block.id===data.blockId)block.done=data.done
+        for(const day of days)if(day?.date===data.date)for(const block of day.blocks ?? [])if(block.id===data.blockId){
+          if(data.done!==undefined)block.done=data.done
+          if(endpoint==='plan.block.feedback'){block.executionNote=data.note;block.completionProgress=data.progress??undefined}
+          block.executionStatus=block.done?(block.completionProgress!==undefined&&block.completionProgress<100?'partial':'completed'):'unknown'
+        }
         await write(String(key),value)
       }
     }
@@ -70,7 +74,7 @@ export function createHttpRpc(owner: string, onStatus: (text: string) => void): 
     async clear() { const db = await database; await new Promise<void>((resolve, reject) => { const tx = db.transaction('data', 'readwrite'); tx.objectStore('data').clear(); tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error) }); db.close(); for(const key of Object.keys(localStorage))if(key.startsWith('daily-plan-feedback:') || key.startsWith('daily-plan-job:'))localStorage.removeItem(key) },
     call(_channel, endpoint, payload, signal) { return serial(async () => {
       const id = crypto.randomUUID()
-      const supportsOffline=['plan.block.toggle','gym.set.log'].includes(endpoint)
+      const supportsOffline=['plan.block.toggle','plan.block.feedback','gym.set.log'].includes(endpoint)
       const data=structuredClone(payload) as any
       if(endpoint==='gym.set.log')data.requestId ??= id
       if(navigator.onLine && ((await read('outbox') ?? []) as Pending[]).length) await synchronize()

@@ -7,11 +7,12 @@ import { Icon } from '../icons.tsx'
 import { WorkflowDraftEditor } from './WorkflowDraftEditor.tsx'
 
 /** One persistent plan surface: applying changes its status, not its layout. */
-export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange, onNavigate }: {
+export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange, onNavigate, mobile=false }: {
   run: WorkflowRunRecord | null; busy: boolean; dirty: boolean; allocation: AdaptiveResult | null;
   operation?: 'generating' | 'applying';
   context: PlanSnapshot['workflow']; runtime: PlanRuntime; onChange: (edits: WorkflowDraftEdits | null) => void;
   onNavigate?: (() => void) | undefined;
+  mobile?: boolean;
 }): JSX.Element {
   const applied = run?.status === 'applied'
   const ready = run?.status === 'ready'
@@ -23,7 +24,7 @@ export function AgentPlanPanel({ run, busy, operation, dirty, allocation, contex
     </div>
     <div className="dp-agent-plan-scroll">
       {draft && run && <>
-        {hasRows && <WorkflowDraftEditor run={run} busy={busy || (!applied && (!!run.factsApplied || !!run.intentApplied))} onChange={onChange} />}
+        {hasRows && <WorkflowDraftEditor run={run} mobile={mobile} busy={busy || (!applied && (!!run.factsApplied || !!run.intentApplied))} onChange={onChange} />}
         {!hasRows && <p className="dp-agent-plan-empty">{applied ? '本次记录已保存。还想安排什么，继续在上方说就好。' : draft.summary}</p>}
         {draft.questions.length > 0 && <div className="dp-agent-plan-questions">{draft.questions.map((question, index) => <p key={index}>{question}</p>)}</div>}
         {(run.applyWarnings ?? []).map((warning, index) => <p className="dp-brief-warning" key={index}>{warning}</p>)}

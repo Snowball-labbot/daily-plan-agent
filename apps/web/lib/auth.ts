@@ -1,11 +1,17 @@
 import { cookies } from 'next/headers'
 import { authClient, config } from './db'
+import { sessionCookiePolicy } from './session-policy'
 export { checkOrigin } from './origin'
-export async function saveSession(session: any) {
+export async function saveSession(session: any, remember?: boolean) {
   const jar = await cookies()
+  // Preserve the choice when refreshing. Existing accounts retain their former
+  // persistent session until their next explicit login.
+  const persistent = remember ?? jar.get('planner_remember')?.value !== '0'
+  const policy = sessionCookiePolicy(persistent, session.expires_in ?? 3600)
   const common = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' }
-  jar.set('planner_access', session.access_token, { ...common, maxAge: session.expires_in ?? 3600 })
-  jar.set('planner_refresh', session.refresh_token, { ...common, maxAge: 60 * 60 * 24 * 30 })
+  jar.set('planner_access', session.access_token, { ...common, ...policy.access })
+  jar.set('planner_refresh', session.refresh_token, { ...common, ...policy.refresh })
+  jar.set('planner_remember', persistent ? '1' : '0', { ...common, ...policy.preference })
 }
 export async function getOwner(request: Request) {
   const jar = await cookies()

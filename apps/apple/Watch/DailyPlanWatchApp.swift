@@ -112,11 +112,12 @@ struct VoiceWatchView: View {
             TextField("点这里听写", text: $text).focused($focused)
             if !text.isEmpty { Text(text).font(.caption).foregroundStyle(.secondary) }
             Button { submitted = store.tell(text, mode: mode) } label: { Label("让 Agnes 理解并更新", systemImage: "sparkles") }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(submitted || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Text(submitted ? store.message : "使用系统听写说出变化。文字会保留，联网后自动调整日程。").font(.caption2).foregroundStyle(.secondary)
         }.navigationTitle("告诉 Agnes")
         .onAppear { text = store.cache.agentDraft ?? ""; if text.isEmpty { focused = true } }
         .onChange(of: text) { _, value in store.saveDraft(value); submitted = false }
+        .onChange(of: mode) { _, _ in submitted = false }
     }
 }
 struct WatchTrainingView: View {

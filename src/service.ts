@@ -386,6 +386,9 @@ export class DailyPlanService {
       colorKey: input.colorKey ?? existing?.colorKey ?? poolItem?.colorKey ?? '',
       done: existing?.done ?? false,
       doneAt: existing?.doneAt ?? null,
+      completionEvidence: existing?.completionEvidence,
+      completionProgress: existing?.completionProgress,
+      executionNote: existing?.executionNote,
       carriedFrom: existing?.carriedFrom ?? null,
       note: input.note ?? existing?.note ?? '',
       adaptive: false,
@@ -422,16 +425,31 @@ export class DailyPlanService {
     const current = this.dayPlan(date)
     const blocks = current.blocks.map((block) =>
       block.id === blockId
-        ? { ...block, done, executionStatus: done ? 'completed' as const : 'unknown' as const, doneAt: done ? new Date().toISOString() : null }
+        ? { ...block, done, executionStatus: done ? (block.completionProgress !== undefined && block.completionProgress < 100 ? 'partial' as const : 'completed' as const) : 'unknown' as const, doneAt: done ? new Date().toISOString() : null }
         : block,
     )
     const saved = await this.saveDay({ ...current, blocks })
     const target = blocks.find((block) => block.id === blockId)
     if (target?.backlogId) {
       const item = this.table('backlog').get(target.backlogId)
-      if (item) await this.table('backlog').put(item.id, { ...item, done, state: done ? 'completed' : 'scheduled' })
+      const complete = done && (target.completionProgress === undefined || target.completionProgress === 100)
+      if (item) await this.table('backlog').put(item.id, { ...item, done: complete, state: complete ? 'completed' : 'scheduled' })
     }
     return saved
+  }
+
+  async feedbackBlock(date: string, blockId: string, input: unknown): Promise<DayPlanRecord> {
+    DateSchema.parse(date)
+    if(date > this.todayIso()) throw new Error('执行备注只能记录今天或过去的事项')
+    const raw=input as {note?:unknown;progress?:unknown;done?:unknown}
+    if(!raw || typeof raw.note !== 'string' || raw.note.length>2000) throw new Error('备注应在 2000 字以内')
+    if(raw.progress!==null && raw.progress!==undefined && (typeof raw.progress!=='number'||!Number.isInteger(raw.progress)||raw.progress<0||raw.progress>100)) throw new Error('完成度应在 0–100% 之间')
+    if(raw.done!==undefined&&typeof raw.done!=='boolean')throw new Error('打卡状态无效')
+    const current=this.dayPlan(date), target=current.blocks.find(block=>block.id===blockId)
+    if(!target)throw new Error('找不到这项安排，请刷新后再记')
+    const progress=raw.progress as number|null|undefined, done=raw.done as boolean|undefined ?? target.done
+    await this.saveDay({...current,blocks:current.blocks.map(block=>block.id===blockId?{...block,executionNote:raw.note as string,completionProgress:progress??undefined}:block)})
+    return this.toggleBlock(date,blockId,done)
   }
 
   async moveBlock(
@@ -1128,8 +1146,9 @@ export class DailyPlanService {
         rawText: existing.raw.text,
         usedPrompts: existing.raw.usedPrompts,
         snapshot: this.daySnapshot(date),
-        completedTitles: counted.filter((block) => block.done).map((block) => block.title),
-        openTitles: counted.filter((block) => !block.done && flexibleBlock(block)).map((block) => `${block.title} (id: ${block.id})`),
+        completedTitles: counted.filter((block) => block.done && (block.completionProgress===undefined||block.completionProgress===100)).map((block) => block.title),
+        openTitles: counted.filter((block) => (!block.done||block.completionProgress!==undefined&&block.completionProgress<100) && flexibleBlock(block)).map((block) => `${block.title} (id: ${block.id})`),
+        executionFeedback: counted.filter(block=>block.executionNote||block.completionProgress!==undefined).map(block=>({title:block.title,checked:block.done,progress:block.completionProgress,note:block.executionNote??''})),
         personalContext: JSON.stringify(this.workflowContext(isoWeekKey(parseIsoDate(date)))),
         upcoming: this.upcomingContext(date, 7),
         periods: this.periods().map((period) => ({
@@ -1687,6 +1706,7 @@ export class DailyPlanService {
     const done = status === 'completed'
     await this.saveDay({ ...day, blocks: day.blocks.map((entry) => entry.id === blockId ? {
       ...entry, done, doneAt: done ? entry.doneAt ?? new Date().toISOString() : null, executionStatus: status, completionEvidence: evidence,
+      ...(done && entry.completionProgress !== undefined ? { completionProgress:100 } : {}),
     } : entry) })
     const taskId = block.backlogId ?? `missed_${stableHash(`${date}:${block.id}`)}`
     const task = this.table('backlog').get(taskId) as BacklogItemRecord | undefined

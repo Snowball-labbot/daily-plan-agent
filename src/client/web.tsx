@@ -6,10 +6,13 @@ import { zh } from './locales.ts'
 import { TodayPage } from './pages/Today.tsx'
 import { WeekPage } from './pages/Week.tsx'
 import { GymPage } from './pages/Gym.tsx'
+import { MobileGym } from './pages/MobileGym.tsx'
 import { LearnPage } from './pages/Learn.tsx'
 import { RecordPage } from './pages/Record.tsx'
 import { SettingsPage } from './pages/Settings.tsx'
 import { CoachDrawer } from './ui/CoachDrawer.tsx'
+import { TaskFeedback } from './ui/TaskFeedback.tsx'
+import type { PlanBlockRecord } from '../domain.ts'
 import { DragLayer } from './drag/DragLayer.tsx'
 import { activeBlock } from '../adaptive.ts'
 import { formatHm, isoWeekKey, parseIsoDate, shiftWeekKey, weekdayZh, weekDates } from '../clock.ts'
@@ -24,6 +27,7 @@ const navIcons: Partial<Record<PageKey, IconName>> = { today:'today', week:'week
 
 /** Phone layout has its own hierarchy instead of shrinking the desktop dashboard. */
 function MobileToday({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
+  const [feedback,setFeedback]=useState<PlanBlockRecord|null>(null)
   const snapshot = state.snapshot
   if (!snapshot) return <p className="mobile-loading">正在读取今天的安排…</p>
   const { today, todayIso, backlog } = snapshot
@@ -34,7 +38,7 @@ function MobileToday({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
   const date = parseIsoDate(todayIso)
   return <section className="mobile-today" aria-label="今日安排">
     <div className="mobile-today-heading">
-      <div><h1>今天</h1><span>{done}/{blocks.length} 已完成</span></div>
+      <div><h1>今天</h1><span>{done}/{blocks.length} 已打卡</span></div>
       <button type="button" onClick={() => { void runtime.setWeek(isoWeekKey(date)); runtime.setPage('week') }}>本周安排<Icon name="chevronRight" size={14} /></button>
     </div>
     {due.length > 0 && <p className="mobile-due"><Icon name="bell" size={14} />今天截止：{due.map(item=>item.title).join('、')}</p>}
@@ -42,11 +46,12 @@ function MobileToday({ state, runtime, onTellAgnes }: PageProps): JSX.Element {
     <ol className="mobile-timeline">{blocks.map(block => <li key={block.id} className={`mobile-task dp-block${block.done ? ' is-done' : ''}${next?.id === block.id ? ' is-next' : ''}`} data-cat={block.category} data-color={block.colorKey || undefined}>
       <div className="mobile-task-time"><b>{formatHm(block.startMinute)}</b><small>{formatHm(block.endMinute)}</small></div>
       <button className="mobile-task-check" type="button" aria-label={`${block.done ? '取消完成' : '完成'}：${block.title}`} aria-pressed={block.done} onClick={() => void runtime.toggleBlock(todayIso, block.id, !block.done)}><span>{block.done && <Icon name="check" size={12} />}</span></button>
-      <div className="mobile-task-copy"><div><b>{block.title}</b>{next?.id===block.id && <small>接下来</small>}</div>{block.note && <p>{block.note}</p>}</div>
+      <button type="button" className="mobile-task-copy mobile-task-detail" aria-label={`查看记录：${block.title}`} onClick={()=>setFeedback(block)}><div><b>{block.title}</b>{next?.id===block.id && <small>接下来</small>}{(block.executionNote||block.completionProgress!==undefined)&&<Icon name="review" size={12}/>}</div>{block.note && <p>{block.note}</p>}</button>
       {block.category === 'gym' && <button className="mobile-task-gym" aria-label={`记录训练：${block.title}`} onClick={() => { runtime.setGymDate(block.gymDate ?? todayIso); runtime.setPage('gym') }}><Icon name="gym" size={18} /></button>}
     </li>)}</ol>
     <button className="mobile-add-task" onClick={() => onTellAgnes?.()}><Icon name="plus" size={16} />添加或调整安排</button>
     <div className="mobile-legend" aria-label="任务分类"><span data-category="study">工作与学习</span><span data-category="gym">健康</span><span data-category="life">生活与人际</span></div>
+    {feedback&&<TaskFeedback date={todayIso} block={feedback} runtime={runtime} onClose={()=>setFeedback(null)}/>}
   </section>
 }
 
@@ -83,7 +88,7 @@ export function PlannerWeb({ owner, email, onLogout }: { owner: string; email: s
     return () => { uninstall();mobileStyles.remove(); media.removeEventListener('change', resize); window.removeEventListener('online', synchronize) }
   }, [runtime, rpc])
   const tell = (text?: string) => { if (text?.trim()) setComposeRequest({ id: crypto.randomUUID(), text, ...(state.snapshot ? { date: state.snapshot.todayIso } : {}) }); setCoachOpen(true) }
-  const Current = phone && state.page === 'today' ? MobileToday : phone && state.page === 'week' ? MobileWeek : pages[state.page] ?? TodayPage
+  const Current = phone && state.page === 'today' ? MobileToday : phone && state.page === 'week' ? MobileWeek : phone && state.page === 'gym' ? MobileGym : pages[state.page] ?? TodayPage
   const headerDate = state.snapshot ? parseIsoDate(state.snapshot.todayIso) : null
   const migrate = async (preview: boolean, file = backup) => {
     setMigrationBusy(true)
