@@ -18,10 +18,17 @@ export function PhoneSheet({
   useEffect(() => {
     const dialog = ref.current!
     const previousFocus = document.activeElement as HTMLElement | null
+    const owner = dialog.closest<HTMLElement>('[role="dialog"]')
     dialog.showModal()
     return () => {
       dialog.close()
-      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+      // Restore after React removes the dialog and the browser finishes closing it.
+      requestAnimationFrame(() => {
+        if (document.querySelector('dialog[open]')) return
+        const target = previousFocus !== document.body && previousFocus?.isConnected
+          ? previousFocus : owner?.querySelector<HTMLElement>('[data-coach-close]')
+        if (target?.getClientRects().length) target.focus({ preventScroll: true })
+      })
     }
   }, [])
   return (
@@ -31,7 +38,7 @@ export function PhoneSheet({
       style={viewport.style}
       data-short-viewport={viewport.short || undefined}
       aria-label={title}
-      onCancel={onClose}
+      onCancel={(event) => { event.preventDefault(); onClose() }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
