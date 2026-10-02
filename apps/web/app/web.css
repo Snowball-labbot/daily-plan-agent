@@ -159,13 +159,22 @@
   .dp-web .phone-gym-heading h1,.phone-learn h1{font-size:25px;font-weight:600;letter-spacing:-.6px;margin:0}
   .dp-web .phone-gym-date>button{width:44px}
   .dp-web .phone-gym-date input{font-size:16px;min-height:44px}
-  .dp-web .phone-exercise{padding:4px 0 10px}
+  .dp-web .phone-exercise{padding:2px 0 6px}
   .dp-web .phone-exercise-head>button{min-height:44px}
-  .dp-web .phone-exercise-head>button:first-child{align-items:flex-start;flex-direction:column;justify-content:center;gap:1px}
+  .dp-web .phone-exercise-head>button:first-child{align-items:center;flex-direction:row;gap:6px}
   .dp-web .phone-exercise-head>button:last-child{width:44px;flex:none}
-  .dp-web .phone-exercise-head b{max-width:100%}
-  .dp-web .phone-exercise-head span{color:var(--phone-meta);font-size:12px}
+  .dp-web .phone-exercise-head b{max-width:100%;font-size:14px;min-width:0}
+  .dp-web .phone-exercise-head span{color:var(--phone-meta);font-size:11px}
   .dp-web .phone-exercise-count[data-complete]{color:#308556}
+  .dp-web .phone-set-inputs{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px;gap:12px}
+  .dp-web .phone-set-inputs>label{position:relative;height:44px;padding:0 4px;border:0;border-radius:0;background:none}
+  .dp-web .phone-set-inputs>label::after{content:'';position:absolute;left:4px;right:4px;bottom:6px;height:1px;background:#e9e9e9;pointer-events:none}
+  .dp-web .phone-set-inputs>label:focus-within::after{background:#555}
+  .dp-web .phone-set-inputs input{height:32px;font-size:16px;padding:0;background:none}
+  .dp-web .phone-set-inputs input::placeholder{font-size:13px;color:#9a9a9a}
+  .dp-web .phone-set-inputs>button{min-height:44px;padding:0;border:0;border-radius:0;background:none;display:grid;place-items:center;color:#308556}
+  .dp-web .phone-set-commit{display:grid;place-items:center;min-width:50px;height:26px;border:1px solid #e0ece4;border-radius:13px;color:inherit;font-size:12px;line-height:1;white-space:nowrap}
+  .dp-web .phone-add-exercise{font-size:13px;min-height:44px;margin:2px 0}
   .dp-web .phone-gym-options button,.phone-part-tabs button{min-height:44px}
   .dp-web .phone-gym-tell{color:var(--phone-meta);font-size:12px;line-height:1.6;gap:8px}
   .dp-web .phone-gym-tell svg{flex:none}

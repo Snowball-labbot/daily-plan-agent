@@ -81,7 +81,7 @@ export function MobileGym({
           }}
         >
           结束训练
-          <Icon name="check" size={14} />
+          <Icon name="check" size={12} />
         </button>
       </header>
       <div className="phone-gym-date">
@@ -91,7 +91,7 @@ export function MobileGym({
             runtime.setGymDate(isoDate(addDays(parseIsoDate(date), -1)))
           }
         >
-          <Icon name="chevronLeft" size={18} />
+          <Icon name="chevronLeft" size={14} />
         </button>
         <input
           type="date"
@@ -107,10 +107,10 @@ export function MobileGym({
             runtime.setGymDate(isoDate(addDays(parseIsoDate(date), 1)))
           }
         >
-          <Icon name="chevronRight" size={18} />
+          <Icon name="chevronRight" size={14} />
         </button>
         <button aria-label="训练选项" onClick={() => setMenu(!menu)}>
-          <Icon name="setting" size={18} />
+          <Icon name="setting" size={14} />
         </button>
       </div>
       {menu && (
@@ -185,7 +185,7 @@ export function MobileGym({
           setPicker(true)
         }}
       >
-        <Icon name="plus" size={18} />
+        <Icon name="plus" size={14} />
         添加动作
       </button>
       <button className="phone-gym-tell" onClick={() => onTellAgnes?.()}>
@@ -494,7 +494,7 @@ function MobileExercise({
           {item.actualSets?.length ?? 0}/{item.sets}
         </span>
         <button aria-label={`调整${item.name}`} onClick={onEdit}>
-          <Icon name="chevronDown" size={16} />
+          <Icon name="chevronDown" size={12} />
         </button>
       </div>
       <div className="phone-set-inputs">
@@ -526,8 +526,8 @@ function MobileExercise({
           />
           <span>次</span>
         </label>
-        <button disabled={busy || !canLog} onClick={() => void record()}>
-          {busy ? '保存…' : '+ 记一组'}
+        <button aria-label={`记录${item.name}一组`} disabled={busy || !canLog} onClick={() => void record()}>
+          <span className="phone-set-commit">{busy ? '保存…' : '+1 组'}</span>
         </button>
       </div>
     </article>
