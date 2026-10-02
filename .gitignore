@@ -1,5 +1,5 @@
 node_modules/
-lib/
+/lib/
 *.log
 .DS_Store
 output/
@@ -15,6 +15,9 @@ output/
 **/node_modules/
 *.jpg
 *.png
+!apps/web/public/icon-180.png
+!apps/web/public/icon-192.png
+!apps/web/public/icon-512.png
 课表.txt
 .tmp-*
 *.zip
@@ -23,3 +26,5 @@ output/
 **/.vercel/
 **/DerivedData/
 **/xcuserdata/
+*.tsbuildinfo
+apps/web/public/mobile.css

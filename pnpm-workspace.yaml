@@ -1,2 +1,24 @@
+packages:
+  - apps/*
 allowBuilds:
+  '@swc/core': true
+  cbor-extract: false
   esbuild: true
+minimumReleaseAgeExclude:
+  - '@workflow/astro@5.0.1'
+  - '@workflow/builders@5.0.1'
+  - '@workflow/cli@5.0.1'
+  - '@workflow/core@5.0.1'
+  - '@workflow/errors@5.0.1'
+  - '@workflow/nest@5.0.1'
+  - '@workflow/next@5.0.1'
+  - '@workflow/nitro@5.0.1'
+  - '@workflow/nuxt@5.0.1'
+  - '@workflow/rollup@5.0.1'
+  - '@workflow/sveltekit@5.0.1'
+  - '@workflow/vite@5.0.1'
+  - '@workflow/web@5.0.1'
+  - '@workflow/world-local@5.0.1'
+  - '@workflow/world-vercel@5.0.1'
+  - '@workflow/world@5.0.1'
+  - workflow@5.0.1

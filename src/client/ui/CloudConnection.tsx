@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react'
+import type { PlanRuntime } from '../runtime.ts'
+export function CloudConnection({ runtime }: { runtime: PlanRuntime }): JSX.Element | null {
+  const [status,setStatus]=useState<{connected:boolean;url:string;email:string}|null>(null)
+  const [url,setUrl]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState('')
+  const [busy,setBusy]=useState(false),[error,setError]=useState('')
+  useEffect(()=>{void runtime.call<any>('cloud.status',{}).then(value=>{setStatus(value);setUrl(value.url);setEmail(value.email)}).catch(()=>undefined)},[runtime])
+  if(!status)return null
+  return <section className="dp-card" style={{padding:16,marginBottom:14}}><h3 style={{fontSize:14}}>电脑与手机同步</h3>{status.connected?<><p className="dp-muted">已连接 {status.email} · {status.url}。修改统一保存到此账号。</p><button className="dp-btn" disabled={busy} onClick={()=>{setBusy(true);void runtime.call<any>('cloud.disconnect',{}).then(value=>{setStatus(value);return runtime.refresh()}).finally(()=>setBusy(false))}}>断开云端，回到本地记录</button></>:<><p className="dp-muted">先在网页版导入最新备份，再连接。连接后保留本地原库，使用同一个云端账号。</p><form style={{display:'flex',gap:8,flexWrap:'wrap'}} onSubmit={event=>{event.preventDefault();setBusy(true);setError('');void runtime.call<any>('cloud.connect',{url,email,password}).then(value=>{setStatus(value);setPassword('');return runtime.refresh()}).catch(failure=>setError(failure instanceof Error?failure.message:String(failure))).finally(()=>setBusy(false))}}><input aria-label="云端网站网址" placeholder="https://你的网址.vercel.app" value={url} required onChange={event=>setUrl(event.target.value)}/><input aria-label="云端个人邮箱" type="email" value={email} required onChange={event=>setEmail(event.target.value)}/><input aria-label="云端个人密码" type="password" value={password} required autoComplete="current-password" onChange={event=>setPassword(event.target.value)}/><button className="dp-btn" disabled={busy}>{busy?'核验并连接…':'连接个人账号'}</button></form></>}{error&&<p className="dp-error" role="alert">{error}</p>}</section>
+}

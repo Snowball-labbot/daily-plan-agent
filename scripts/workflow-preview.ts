@@ -36,11 +36,11 @@ const client = await build({ entryPoints: ['scripts/workflow-preview-client.tsx'
 const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>每日计划 · 隔离预览</title><style>body{margin:0;font-family:system-ui;color:#242424;--dsw-alias-label-primary:#242424;--dsw-alias-label-secondary:#666;--dsw-alias-label-tertiary:#888;--dsw-alias-bg-base:#fff;--dsw-alias-bg-layer-1:#fafafa;--dsw-alias-border-primary:#ddd;--dsw-alias-interactive-bg-hover:#f4f4f4;--dsw-alias-interactive-bg-active:#eaeaea}</style><div id="root"></div><script src="/client.js"></script></html>`
 const server = createServer(async (request, response) => {
   if (request.url === '/client.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(client.outputFiles[0]!.text); return }
-  if (request.url === '/rpc' && request.method === 'POST') {
+  if (['/rpc','/api/rpc'].includes(request.url ?? '') && request.method === 'POST') {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
     const { endpoint, payload } = JSON.parse(Buffer.concat(chunks).toString())
-    if (endpoint === 'workflow.run') ctx.reply = JSON.stringify({ summary: '根据复盘补记已完成的论文与真实训练数据，撤回重复顺延，英语推进放在上午，保留25%机动。', focus: ['推进英语'],
+    if (['workflow.run','workflow.start'].includes(endpoint)) ctx.reply = JSON.stringify({ summary: '根据复盘补记已完成的论文与真实训练数据，撤回重复顺延，英语推进放在上午，保留25%机动。', focus: ['推进英语'],
       tasks: payload.text.includes('作业') ? [{ title: '数学作业', category: 'study', periods: 2, dueDate: '2026-10-02' }] : [],
       taskActions: payload.text.includes('昨天论文第三章完成了') && service.workflowContext().tasks.some((task) => task.id === paper.id)
         ? [{ taskId: paper.id, action: 'complete', date: '2026-09-30', evidence: '昨天论文第三章完成了' }] : [],
@@ -53,7 +53,7 @@ const server = createServer(async (request, response) => {
       gymAdvice: payload.text.includes('卧推') ? ['这次实记40kg共30次，上次实记35kg共20次；先观察相同组数下的表现和恢复，不直接据此增加重量。'] : [] })
     if (endpoint === 'review.structure') ctx.reply = JSON.stringify({ summary: '推进阅读，并给明天留出机动。', achievements: ['概率论阅读20页'],
       learning: [{ ref: book.id, title: book.title, kind: 'reading', mode: 'delta', value: 20 }], plan: [], energy: 3 })
-    if (endpoint === 'workflow.run' && payload.mode === 'plan') ctx.reply = JSON.stringify({ summary: '把明确的活动写入日程，论文修改安排在下周，保留机动时间。',
+    if (['workflow.run','workflow.start'].includes(endpoint) && payload.mode === 'plan') ctx.reply = JSON.stringify({ summary: '把明确的活动写入日程，论文修改安排在下周，保留机动时间。',
       appointments: [
         ...(payload.text.includes('明天19:10–20:35和朋友聚餐') ? [{ date: '2026-10-02', title: '朋友聚餐', category: 'activity', lifeArea: 'relationships', startMinute: 1150, endMinute: 1235, evidence: '明天19:10–20:35和朋友聚餐' }] : []),
         ...(payload.text.includes('下周日10:00–11:00开会') ? [{ date: '2026-10-11', title: '周日会议', category: 'intern', lifeArea: 'work', startMinute: 600, endMinute: 660, evidence: '下周日10:00–11:00开会' }] : []),

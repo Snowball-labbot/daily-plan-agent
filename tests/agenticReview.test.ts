@@ -58,16 +58,20 @@ test('unchecked history remains unknown and cannot depress calibrated capacity',
   assert.equal(stat.unknown, 1); assert.equal(stat.level, -1)
 })
 
-test('invalid fact evidence or date rejects all changes before writes', async () => {
+test('unsupported historical facts are isolated while supported new arrangements can be applied', async () => {
   const { service, ctx } = await fixture()
   await service.upsertBlock('2026-09-30', { title: '论文', startPeriod: 1, endPeriod: 2 })
   const block = service.dayPlan('2026-09-30').blocks[0]!
-  ctx.reply = JSON.stringify({ summary: '无证据', tasks: [{ title: '不应写入', category: 'study' }],
+  ctx.reply = JSON.stringify({ summary: '安排英语，保留未知完成状态', tasks: [{ title: '学英语', category: 'study' }],
     executions: [{ date: '2026-09-30', blockId: block.id, status: 'completed', evidence: '捏造了完成事实' }] })
-  await assert.rejects(service.workflowRun({ text: '最近忙', mode: 'review', apply: true }), /原文依据/)
-  assert.equal(service.listBacklog().length, 0); assert.equal(service.dayPlan('2026-09-30').blocks[0]!.done, false)
+  const result = await service.workflowRun({ text: '最近忙，帮我安排学英语', mode: 'review', apply: true })
+  assert.equal(result.run.status, 'applied')
+  assert(result.run.applyWarnings?.some((warning) => warning.includes('原文')))
+  assert(Object.values(service.exportAll().backlog as Record<string, any>).some((task) => task.title === '学英语')); assert.equal(service.dayPlan('2026-09-30').blocks[0]!.done, false)
   ctx.reply = JSON.stringify({ summary: '日期不对', executions: [{ date: '2026-09-30', blockId: block.id, status: 'completed', evidence: '论文做完' }] })
-  await assert.rejects(service.workflowRun({ text: '论文做完', mode: 'review', rangeStart: '2026-10-01', apply: true }), /日期超出/)
+  const next = await service.workflowRun({ text: '论文做完', mode: 'review', rangeStart: '2026-10-01', apply: true })
+  assert.equal(next.run.status, 'applied')
+  assert.equal(service.dayPlan('2026-09-30').blocks[0]!.done, false)
 })
 
 test('review reconstructs actual gym sets once and attendance completes linked training', async () => {

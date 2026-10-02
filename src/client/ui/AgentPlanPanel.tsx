@@ -7,8 +7,9 @@ import { Icon } from '../icons.tsx'
 import { WorkflowDraftEditor } from './WorkflowDraftEditor.tsx'
 
 /** One persistent plan surface: applying changes its status, not its layout. */
-export function AgentPlanPanel({ run, busy, dirty, allocation, context, runtime, onChange }: {
+export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange }: {
   run: WorkflowRunRecord | null; busy: boolean; dirty: boolean; allocation: AdaptiveResult | null;
+  operation?: 'generating' | 'applying';
   context: PlanSnapshot['workflow']; runtime: PlanRuntime; onChange: (edits: WorkflowDraftEdits | null) => void;
 }): JSX.Element {
   const applied = run?.status === 'applied'
@@ -16,7 +17,7 @@ export function AgentPlanPanel({ run, busy, dirty, allocation, context, runtime,
   const draft = run?.draft
   const hasRows = !!(draft?.tasks.length || draft?.appointments.length)
   return <section className="dp-agent-plan" aria-label="安排与记录" aria-busy={busy}>
-    <div className="dp-agent-plan-head"><b>安排与记录</b><span role="status">{busy ? '正在整理…' : dirty ? '有修改未保存' : applied ? '已保存' : ready ? '待应用' : '说说你的安排'}</span>
+    <div className="dp-agent-plan-head"><b>安排与记录</b><span role="status">{busy ? operation === 'applying' ? '正在应用…' : '正在整理…' : dirty ? '有修改未保存' : applied ? '已保存' : ready ? '待应用' : '说说你的安排'}</span>
       <button type="button" className="dp-btn dp-btn--ghost dp-btn--sm" onClick={() => { const date = draft?.appointments[0]?.date ?? run?.planStart; if (date) void runtime.setWeek(isoWeekKey(parseIsoDate(date))); runtime.setPage('week') }}>看日程<Icon name="chevronRight" size={12} /></button>
     </div>
     <div className="dp-agent-plan-scroll">
