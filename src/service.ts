@@ -1567,7 +1567,7 @@ export class DailyPlanService {
     if (input.signal?.aborted) controller.abort()
     this.coachJobs.set(key, controller)
     const stamp = new Date().toISOString()
-    let run = WorkflowRunSchema.parse({ id: input.runId ?? newId('coach'), date, weekKey, mode: input.mode, rawText: input.text,
+    let run = WorkflowRunSchema.parse({ id: input.runId ?? newId('coach'), date, weekKey, mode: input.mode, rawText: input.text, inputText: input.text,
       status: 'running', phase: 'generating', createdAt: stamp, updatedAt: stamp, rangeStart, rangeEnd, planStart, planEnd,
       ...(input.replaceConflicts !== undefined ? { replaceConflicts: input.replaceConflicts } : {}) })
     try {
@@ -1990,8 +1990,10 @@ export class DailyPlanService {
       const appointments = (run.intentApplied ? [] : draft.appointments).map((event) => {
         const sourceText = event.sourceRunId ? this.table('workflow_runs').get(event.sourceRunId)?.rawText : run.rawText
         if (!event.evidence.trim() || !sourceText?.includes(event.evidence)) throw new Error('未来活动缺少可核验的原文依据，请重新整理')
-        if (event.date < planStart || event.date > planEnd || event.date < this.todayIso() ||
-          (event.date === this.todayIso() && event.startMinute < this.currentMinute())) throw new Error('未来活动超出展望范围，或开始时间已过去，请调整范围或重新整理')
+        if (event.date < planStart || event.date > planEnd) throw new Error(`「${event.title}」在 ${event.date}，不在本次安排日期 ${planStart} 至 ${planEnd} 内。请修改该项日期，或按最新描述重新整理。`)
+        if (event.date < this.todayIso() || (event.date === this.todayIso() && event.startMinute < this.currentMinute())) {
+          throw new Error(`「${event.title}」的开始时间 ${event.date} ${formatHm(event.startMinute)} 已过去；现在是 ${this.todayIso()} ${formatHm(this.currentMinute())}。请修改该项时间，或重新整理剩余安排。`)
+        }
         const periods = this.periods().filter((period) => period.index <= this.dayEndPeriod())
         if (event.startMinute < Math.min(...periods.map((p) => p.startMinute)) || event.endMinute > Math.max(...periods.map((p) => p.endMinute))) {
           throw new Error(`${event.date} 的活动超出当前日程显示时段，请先在设置中扩展作息时间`)

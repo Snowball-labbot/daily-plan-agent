@@ -7,23 +7,25 @@ import { Icon } from '../icons.tsx'
 import { WorkflowDraftEditor } from './WorkflowDraftEditor.tsx'
 
 /** One persistent plan surface: applying changes its status, not its layout. */
-export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange, onNavigate, mobile=false }: {
+export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange, onNavigate, mobile=false, stale=false }: {
   run: WorkflowRunRecord | null; busy: boolean; dirty: boolean; allocation: AdaptiveResult | null;
   operation?: 'generating' | 'applying';
   context: PlanSnapshot['workflow']; runtime: PlanRuntime; onChange: (edits: WorkflowDraftEdits | null) => void;
   onNavigate?: (() => void) | undefined;
   mobile?: boolean;
+  stale?: boolean;
 }): JSX.Element {
   const applied = run?.status === 'applied'
   const ready = run?.status === 'ready'
   const draft = run?.draft
   const hasRows = !!(draft?.tasks.length || draft?.appointments.length)
   return <section className="dp-agent-plan" aria-label="安排与记录" aria-busy={busy}>
-    <div className="dp-agent-plan-head"><b>安排与记录</b><span role="status">{busy ? operation === 'applying' ? '正在应用…' : '正在整理…' : dirty ? '有修改未保存' : applied ? '已保存' : ready ? '待应用' : '说说你的安排'}</span>
+    <div className="dp-agent-plan-head"><b>安排与记录</b><span role="status">{busy ? operation === 'applying' ? '正在应用…' : '正在整理…' : stale ? '需重新整理' : dirty ? '有修改未保存' : applied ? '已保存' : ready ? '待应用' : '说说你的安排'}</span>
       <button type="button" className="dp-btn dp-btn--ghost dp-btn--sm" onClick={() => { const date = draft?.appointments[0]?.date ?? run?.planStart; if (date) void runtime.setWeek(isoWeekKey(parseIsoDate(date))); runtime.setPage('week'); onNavigate?.() }}>看日程<Icon name="chevronRight" size={12} /></button>
     </div>
     <div className="dp-agent-plan-scroll">
-      {draft && run && <>
+      {stale && draft && run && <><p className="dp-agent-plan-empty">按上方的新描述和日期，重新整理接下来的安排。</p><details className="dp-agent-plan-detail"><summary>上一次{applied ? '已保存的' : '生成的'}安排<Icon name="chevronDown" size={12} /></summary><p>{run.mode === 'plan' ? `${run.planStart} — ${run.planEnd}` : `${run.rangeStart} — ${run.rangeEnd}`}</p><p>{draft.summary}</p><p className="dp-muted">原文：{run.rawText}</p></details></>}
+      {!stale && draft && run && <>
         {hasRows && <WorkflowDraftEditor run={run} mobile={mobile} busy={busy || (!applied && (!!run.factsApplied || !!run.intentApplied))} onChange={onChange} />}
         {!hasRows && <p className="dp-agent-plan-empty">{applied ? '本次记录已保存。还想安排什么，继续在上方说就好。' : draft.summary}</p>}
         {draft.questions.length > 0 && <div className="dp-agent-plan-questions">{draft.questions.map((question, index) => <p key={index}>{question}</p>)}</div>}

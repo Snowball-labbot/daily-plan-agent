@@ -8,6 +8,7 @@ import type { PlanSnapshot } from '../wire.ts'
 import { Card } from './kit.tsx'
 import { WorkflowDraftEditor } from './WorkflowDraftEditor.tsx'
 import { AgentPlanPanel } from './AgentPlanPanel.tsx'
+import { workflowInputText, workflowSourceMatches, workflowSubmission, workflowText } from './workflowSource.ts'
 
 type Mode = WorkflowRunRecord['mode']
 type RunResult = { run: WorkflowRunRecord; allocation: AdaptiveResult | null }
@@ -59,6 +60,7 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
   useEffect(() => {
     setResult(null); setAllocation(null); setError(null); setOtherContext(null)
   }, [key, endDate])
+  useEffect(() => { setManualEdits(null); setError(null) }, [text, mode, scope, span, customStart, futureSpan, futureStart, futureEnd, key, endDate])
   useEffect(() => {
     if (!key || key === snapshot?.weekKey) return
     let cancelled = false
@@ -73,10 +75,11 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
     const last = unified ? context.latestConversation : context.latestRun
     let saved: string | null = null
     try { saved = localStorage.getItem(draftKey) } catch { /* Optional draft storage. */ }
-    setText(saved ?? (last && last.status !== 'applied' ? last.rawText : ''))
-    if (last && ['ready', 'applied'].includes(last.status) && (saved === null || saved === last.rawText)) {
+    setText(saved ?? (last && last.status !== 'applied' ? workflowInputText(last) : ''))
+    if (last && ['ready', 'applied'].includes(last.status) && (saved === null || saved === workflowInputText(last))) {
       setMode(last.mode); setScope(last.mode === 'plan' ? 'future' : last.mode === 'weekly' ? 'week' : 'recent'); setComposerOpen(last.status === 'applied')
       if (last.mode === 'plan' && last.planStart && last.planEnd) { setFutureSpan('custom'); setFutureStart(last.planStart); setFutureEnd(last.planEnd) }
+      if (last.mode === 'review' && last.rangeStart && last.rangeEnd === endDate) { setSpan('custom'); setCustomStart(last.rangeStart) }
     }
     if (last?.status === 'failed') setError(last.error)
   }, [context, key, draftKey, unified])
@@ -96,6 +99,9 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
   const planEnd = futureSpan === 'tomorrow' ? tomorrow : futureSpan === 'nextWeek' ? nextWeek[6]! : futureSpan === 'custom' ? futureEnd : isoDate(addDays(parseIsoDate(snapshot.todayIso), 13))
   const rangeEnd = mode === 'weekly' ? (weekDates(context.weekKey)[6]! < snapshot.todayIso ? weekDates(context.weekKey)[6]! : snapshot.todayIso) : endDate
   const rangeStart = mode === 'weekly' ? weekDates(context.weekKey)[0]! : span === 'custom' ? customStart : isoDate(addDays(parseIsoDate(rangeEnd), -(Number(span) - 1)))
+  const source = { text: workflowText(text, scope), mode, today: snapshot.todayIso, rangeStart, rangeEnd, planStart, planEnd }
+  const stale = !!latest?.draft && !workflowSourceMatches(latest, source)
+  const submission = workflowSubmission(latest, source, !!manualEdits)
   const runAction = async (action: () => Promise<void>, stage: 'generating' | 'applying' = 'applying'): Promise<void> => {
     setOperation(stage); setBusy(true); onBusyChange?.(true); setError(null)
     try { await action() }
@@ -130,7 +136,7 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
     if (requestMode === 'plan' && (!planStart || !planEnd || planStart > planEnd)) { setError('请选好未来安排的起止日期。'); return }
     if (requestMode !== 'weekly' && input.trim() === '') { setError('说说做了什么、哪里有变化，或接下来想做什么。'); return }
     void runAction(async () => {
-      const job = await runtime.call<{ id: string }>('workflow.start', { clientRequestId: crypto.randomUUID(), text: requestScope === 'training' ? `请重点分析训练表现、进步和恢复，并联动后续安排。用户原文：\n${input}` : requestScope === 'learning' ? `请重点分析学习进度和下一步，并联动后续安排。用户原文：\n${input}` : input, mode: requestMode, weekKey: requestMode === 'plan' ? isoWeekKey(parseIsoDate(planStart)) : key, apply, replaceConflicts,
+      const job = await runtime.call<{ id: string }>('workflow.start', { clientRequestId: crypto.randomUUID(), text: workflowText(input, requestScope), mode: requestMode, weekKey: requestMode === 'plan' ? isoWeekKey(parseIsoDate(planStart)) : key, apply, replaceConflicts,
         ...(requestMode === 'plan' ? { planStart, planEnd } : {}),
         ...(['review', 'weekly'].includes(requestMode) ? { rangeStart: incoming !== undefined ? isoDate(addDays(parseIsoDate(endDate), -1)) : rangeStart, rangeEnd: incoming !== undefined ? endDate : rangeEnd } : {}) })
       try { localStorage.setItem(jobKey, job.id) } catch { /* Optional. */ }
@@ -141,7 +147,7 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
   submitIncoming.current = (input) => ask(true, input)
   const waiting = context.tasks.filter((task) => task.state !== 'scheduled')
   const unknown = context.recentDays.flatMap((day) => day.date < snapshot.todayIso ? day.blocks.filter((block) => flexibleBlock(block) && !block.done && block.executionStatus !== 'missed') : [])
-  const savePlan = (): void => { if (!latest) return; void runAction(async () => {
+  const savePlan = (): void => { if (!latest) return; if (submission === 'generate') { ask(true); return }; void runAction(async () => {
     if (latest.status === 'applied') {
       if (!manualEdits) return
       const updated = await runtime.call<WorkflowRunRecord>('workflow.schedule.update', { id: latest.id, edits: manualEdits, expectedUpdatedAt: latest.updatedAt })
@@ -182,18 +188,18 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
       {!unified && context.memories.length > 0 && <details className="dp-coach-context dp-known-memory"><summary>Agnes 已记住 {context.memories.length} 条习惯</summary>{context.memories.slice(0, 4).map((memory) => <p key={memory.id}>{memory.text}</p>)}<small>习惯变了也可以直接说，完整记忆可在设置中编辑。</small></details>}
       {!unified && error && <div className="dp-error" role="alert">{error}</div>}
     </div>
-    {unified && <AgentPlanPanel run={latest ?? null} mobile={mobile} busy={busy} operation={operation} dirty={!!manualEdits} allocation={allocation} context={context} runtime={runtime} onChange={setManualEdits} onNavigate={onNavigate} />}
+    {unified && <AgentPlanPanel run={latest ?? null} mobile={mobile} busy={busy} operation={operation} stale={stale} dirty={!stale && !!manualEdits} allocation={stale ? null : allocation} context={context} runtime={runtime} onChange={setManualEdits} onNavigate={onNavigate} />}
     </div>
     {unified ? <>
       <footer className="dp-agent-workspace-footer">
-        <div className="dp-agent-workspace-status" role={error ? 'alert' : 'status'} title={error ?? ''}>{error ?? (manualEdits ? '改好后保存即可，不需要再问 AI。' : '直接说，或在上方改时间和描述。')}
+        <div className="dp-agent-workspace-status" role={error ? 'alert' : 'status'} title={error ?? ''}>{error ?? (stale ? '文字或日期已改变，整理后会更新安排。' : manualEdits ? '改好后保存即可，不需要再问 AI。' : '直接说，或在上方改时间和描述。')}
           {busy && operation === 'generating' && <button type="button" onClick={() => { if (activeJob.current) void runtime.call('workflow.cancel', { id: activeJob.current }) }}>停止整理</button>}
-          {!busy && <button type="button" onClick={() => { let id = activeJob.current ?? latest?.id; try { id = localStorage.getItem(jobKey) ?? id } catch { /* Optional. */ } if (id) void runAction(() => recover(id!), 'generating') }}>恢复安排</button>}
+          {!busy && !stale && <button type="button" onClick={() => { let id = activeJob.current ?? latest?.id; try { id = localStorage.getItem(jobKey) ?? id } catch { /* Optional. */ } if (id) void runAction(() => recover(id!), 'generating') }}>恢复安排</button>}
         </div>
-        {mobile ? <div className="phone-coach-actions"><button className="phone-coach-secondary" disabled={busy||!text.trim()} onClick={()=>ask(false)}>{latest?.status==='ready'?'重新理解':'先看安排'}</button><button className="dp-btn dp-btn--primary" disabled={busy||(!text.trim()&&mode!=='weekly'&&!(latest?.status==='applied'&&manualEdits))} onClick={()=>latest?.status==='ready'||(latest?.status==='applied'&&manualEdits)?savePlan():ask(true)}><Icon name={busy?'refresh':latest?.status==='ready'?'check':'sparkle'} size={18}/>{busy?operation==='applying'?'正在应用…':'正在整理…':latest?.status==='ready'?'应用安排':latest?.status==='applied'&&manualEdits?'保存修改':'整理并安排'}</button></div> : <div className="dp-agent-workspace-actions">
+        {mobile ? <div className="phone-coach-actions"><button className="phone-coach-secondary" disabled={busy||(!text.trim()&&mode!=='weekly')} onClick={()=>ask(false)}>{latest?.draft?'重新理解':'先看安排'}</button><button className="dp-btn dp-btn--primary" disabled={busy||(!text.trim()&&mode!=='weekly'&&submission!=='save')} onClick={()=>submission==='generate'?ask(true):savePlan()}><Icon name={busy?'refresh':submission==='generate'?'sparkle':'check'} size={18}/>{busy?operation==='applying'?'正在应用…':'正在整理…':submission==='apply'?'应用安排':submission==='save'?'保存修改':'整理并安排'}</button></div> : <div className="dp-agent-workspace-actions">
           <button type="button" className="dp-btn dp-btn--primary" disabled={busy || (!text.trim() && mode !== 'weekly')} onClick={() => ask(true)}><Icon name={busy ? 'refresh' : 'sparkle'} size={15} />整理并安排</button>
           <button type="button" className="dp-btn" disabled={busy || (!text.trim() && mode !== 'weekly')} onClick={() => ask(false)}>先看安排</button>
-          <button type="button" className="dp-btn" disabled={busy || !(latest?.status === 'ready' || (latest?.status === 'applied' && manualEdits))} onClick={savePlan}><Icon name="check" size={14} />{latest?.status === 'applied' ? '保存修改' : '应用安排'}</button>
+          <button type="button" className="dp-btn" disabled={busy || submission === 'generate'} onClick={savePlan}><Icon name="check" size={14} />{latest?.status === 'applied' ? '保存修改' : '应用安排'}</button>
         </div>}
       </footer>
     </> : <div className="dp-coach-output" aria-live="polite" aria-busy={busy} hidden={busy || (composerOpen)}>
@@ -219,12 +225,7 @@ export function WorkflowPanel({ state, runtime, mode: initialMode = 'review', we
           {latest.draft.gymLogs.map((log) => <div key={log.date}>{log.date} 训练 · {log.exercises.reduce((sum, item) => sum + item.sets.length, 0)} 组实际数据</div>)}
           {latest.draft.unavailable.map((item, index) => <div key={index}>{item.date} 第 {item.startPeriod}–{item.endPeriod} 节：{item.reason}</div>)}
           <label className="dp-coach-note dp-replace-option"><input type="checkbox" checked={replaceConflicts} disabled={busy} onChange={(event) => setReplaceConflicts(event.target.checked)} />以这次描述为准，移开冲突的旧安排</label>
-          <button type="button" className="dp-btn dp-btn--primary" disabled={busy} onClick={() => { void runAction(async () => {
-            if (manualEdits) { const updated = await runtime.call<WorkflowRunRecord>('workflow.draft.update', { id: latest.id, edits: manualEdits, expectedUpdatedAt: latest.updatedAt }); setResult({ run: updated, allocation: null }); setManualEdits(null) }
-            const next = await runtime.call<RunResult>('workflow.apply', { id: latest.id, replaceConflicts }); setResult(next); setAllocation(next.allocation)
-            setText(''); setComposerOpen(true)
-            try { localStorage.removeItem(draftKey) } catch { /* Optional. */ }
-          }) }}>{manualEdits ? '应用微调后的安排' : '应用这份建议'}<Icon name="check" size={16} /></button>
+          <button type="button" className="dp-btn dp-btn--primary" disabled={busy} onClick={savePlan}>{stale ? '按最新描述重新整理' : manualEdits ? '应用微调后的安排' : '应用这份建议'}<Icon name="check" size={16} /></button>
         </div>}
         <div className="dp-result-links">{([['week', '后续安排', 'week'], ['learn', '学习进度', 'list'], ['record', '训练记录', 'gym'], ['setting', '个人记忆', 'database']] as const).map(([page, label, icon]) => <button type="button" key={page} onClick={() => { if (page === 'record') runtime.setRecordView('training'); runtime.setPage(page) }}><Icon name={icon} size={16} />{label}<Icon name="chevronRight" size={13} /></button>)}</div>
       </div> : <div className="dp-coach-steps">

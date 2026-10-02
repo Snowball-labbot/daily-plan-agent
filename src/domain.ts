@@ -494,6 +494,7 @@ export const WorkflowRunSchema = z.object({
   id: z.string(), date: DateSchema, weekKey: z.string(),
   mode: z.enum(['plan', 'replan', 'weekly', 'review']),
   rawText: z.string().max(30_000),
+  inputText: z.string().max(30_000).optional(),
   status: z.enum(['draft', 'running', 'ready', 'failed', 'applied']).default('draft'),
   phase: z.enum(['generating', 'applying', 'ready', 'applied', 'failed', 'cancelled']).optional(),
   draft: WorkflowDraftSchema.nullable().default(null),
