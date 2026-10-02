@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { checkOrigin } from '../apps/web/lib/auth.ts'
+import { checkOrigin } from '../apps/web/lib/origin.ts'
 
 test('same-origin browser requests work behind Next while cross-origin writes fail',()=>{
   assert.doesNotThrow(()=>checkOrigin(new Request('http://localhost:3001/api/auth',{headers:{host:'127.0.0.1:3001',origin:'http://127.0.0.1:3001'}})))

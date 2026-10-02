@@ -1,17 +1,6 @@
 import { cookies } from 'next/headers'
 import { authClient, config } from './db'
-export function checkOrigin(request: Request) {
-  const origin = request.headers.get('origin')
-  // Next may normalize request.url to its internal localhost address. The actual
-  // Host header identifies the browser's destination, including its public port.
-  if (origin) {
-    const supplied=new URL(origin)
-    const expected=(request.headers.get('host') ?? new URL(request.url).host).toLowerCase()
-    const protocol=request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ?? new URL(request.url).protocol.replace(':','')
-    if(supplied.host.toLowerCase()!==expected || supplied.protocol!==`${protocol}:`)throw Object.assign(new Error('请求来源不匹配'), {status:403})
-  }
-  if (!origin && request.headers.has('cookie') && !request.headers.has('authorization')) throw Object.assign(new Error('缺少请求来源'), { status: 403 })
-}
+export { checkOrigin } from './origin'
 export async function saveSession(session: any) {
   const jar = await cookies()
   const common = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' as const, path: '/' }
