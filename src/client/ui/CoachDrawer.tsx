@@ -27,7 +27,7 @@ export function CoachDrawer({ open, onClose, ...props }: Parameters<typeof Workf
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
     }}>
       <header>{!props.mobile&&<Icon name="sparkle" size={18} />}<div><b>告诉 Agnes</b><small>复盘或展望，记录和计划一起更新</small></div><span className="dp-spacer" /><label hidden={planning||props.mobile}>截至 <input type="date" aria-label="复盘截止日期" value={end} max={props.state.snapshot?.todayIso} onChange={(event) => { if (event.target.value) setEnd(event.target.value) }} /></label><button type="button" className="dp-btn dp-btn--sm dp-btn--ghost" aria-label="关闭复盘" data-coach-close onClick={onClose}><Icon name={props.mobile?'chevronLeft':'close'} size={props.mobile?22:17} /></button></header>
-      {end && <WorkflowPanel {...props} weekKey={isoWeekKey(parseIsoDate(end))} reportEnd={end} onReportEndChange={setEnd} compact unified onPlanningChange={setPlanning} />}
+      {end && <WorkflowPanel {...props} weekKey={isoWeekKey(parseIsoDate(end))} reportEnd={end} onReportEndChange={setEnd} onNavigate={onClose} compact unified onPlanningChange={setPlanning} />}
     </aside>
   </div>
 }

@@ -7,10 +7,11 @@ import { Icon } from '../icons.tsx'
 import { WorkflowDraftEditor } from './WorkflowDraftEditor.tsx'
 
 /** One persistent plan surface: applying changes its status, not its layout. */
-export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange }: {
+export function AgentPlanPanel({ run, busy, operation, dirty, allocation, context, runtime, onChange, onNavigate }: {
   run: WorkflowRunRecord | null; busy: boolean; dirty: boolean; allocation: AdaptiveResult | null;
   operation?: 'generating' | 'applying';
   context: PlanSnapshot['workflow']; runtime: PlanRuntime; onChange: (edits: WorkflowDraftEdits | null) => void;
+  onNavigate?: (() => void) | undefined;
 }): JSX.Element {
   const applied = run?.status === 'applied'
   const ready = run?.status === 'ready'
@@ -18,7 +19,7 @@ export function AgentPlanPanel({ run, busy, operation, dirty, allocation, contex
   const hasRows = !!(draft?.tasks.length || draft?.appointments.length)
   return <section className="dp-agent-plan" aria-label="安排与记录" aria-busy={busy}>
     <div className="dp-agent-plan-head"><b>安排与记录</b><span role="status">{busy ? operation === 'applying' ? '正在应用…' : '正在整理…' : dirty ? '有修改未保存' : applied ? '已保存' : ready ? '待应用' : '说说你的安排'}</span>
-      <button type="button" className="dp-btn dp-btn--ghost dp-btn--sm" onClick={() => { const date = draft?.appointments[0]?.date ?? run?.planStart; if (date) void runtime.setWeek(isoWeekKey(parseIsoDate(date))); runtime.setPage('week') }}>看日程<Icon name="chevronRight" size={12} /></button>
+      <button type="button" className="dp-btn dp-btn--ghost dp-btn--sm" onClick={() => { const date = draft?.appointments[0]?.date ?? run?.planStart; if (date) void runtime.setWeek(isoWeekKey(parseIsoDate(date))); runtime.setPage('week'); onNavigate?.() }}>看日程<Icon name="chevronRight" size={12} /></button>
     </div>
     <div className="dp-agent-plan-scroll">
       {draft && run && <>
@@ -38,7 +39,7 @@ export function AgentPlanPanel({ run, busy, operation, dirty, allocation, contex
           </>}
           {draft.gymAdvice.map((advice, index) => <p key={`gym:${index}`}>{advice}</p>)}
           {draft.memories.map((memory, index) => <p key={`memory:${index}`}>记住了：{memory.text}</p>)}
-          <div className="dp-result-links">{([['learn', '学习记录'], ['record', '训练记录'], ['setting', '个人记忆']] as const).map(([page, label]) => <button type="button" key={page} onClick={() => { if (page === 'record') runtime.setRecordView('training'); runtime.setPage(page) }}>{label}<Icon name="chevronRight" size={12} /></button>)}</div>
+          <div className="dp-result-links">{([['learn', '学习记录'], ['record', '训练记录'], ['setting', '个人记忆']] as const).map(([page, label]) => <button type="button" key={page} onClick={() => { if (page === 'record') runtime.setRecordView('training'); runtime.setPage(page); onNavigate?.() }}>{label}<Icon name="chevronRight" size={12} /></button>)}</div>
           <p className="dp-muted">原文：{run.rawText}</p>
         </details>
       </>}
