@@ -36,7 +36,7 @@ targets:
       path: Watch/Info.plist
       properties:
         CFBundleDisplayName: 每日计划
-        WKWatchKitApp: true
+        WKApplication: true
         WKCompanionAppBundleIdentifier: com.snowball.dailyplan
     settings:
       base:
