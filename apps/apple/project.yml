@@ -31,7 +31,7 @@ targets:
   DailyPlanWatch:
     type: application
     platform: watchOS
-    sources: [Shared/Models.swift, Watch]
+    sources: [Shared/Models.swift, Shared/SyncJournal.swift, Watch]
     info:
       path: Watch/Info.plist
       properties:

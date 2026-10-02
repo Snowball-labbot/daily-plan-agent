@@ -24,7 +24,7 @@ enum JSONValue: Codable {
     }
 }
 struct CloudSession: Codable { let owner: String; let email: String; var accessToken: String; var refreshToken: String; var expiresAt: Double }
-struct PlannerSnapshot: Codable { var todayIso: String; var today: DayPlan; var gymSession: GymSession }
+struct PlannerSnapshot: Codable { var todayIso: String; var today: DayPlan; var gymSession: GymSession; var week: [DayPlan]? = nil }
 struct DayPlan: Codable { var date: String; var blocks: [PlanBlock] }
 struct PlanBlock: Codable, Identifiable {
     var id: String; var title: String; var category: String; var startMinute: Int; var endMinute: Int; var done: Bool
@@ -40,8 +40,25 @@ struct PendingOperation: Codable, Identifiable {
     let owner: String; let endpoint: String; let payload: [String: JSONValue]
     let createdAt: Date
     init(owner: String, endpoint: String, payload: [String: JSONValue]) { self.owner = owner; self.endpoint = endpoint; self.payload = payload; createdAt = Date() }
+    init(id: String, owner: String, endpoint: String, payload: [String: JSONValue], createdAt: Date) {
+        self.id = id; self.owner = owner; self.endpoint = endpoint; self.payload = payload; self.createdAt = createdAt
+    }
 }
-struct WatchCache: Codable { var owner: String; var snapshot: PlannerSnapshot?; var pending: [PendingOperation] }
+struct AgentUpdate: Codable, Identifiable {
+    var id: String; var text: String; var phase: String; var summary: String; var createdAt: Date
+    var finished: Bool { ["applied", "ready", "failed", "cancelled"].contains(phase) }
+}
+struct WatchCache: Codable {
+    var owner: String; var snapshot: PlannerSnapshot?; var pending: [PendingOperation]
+    var revision: Int? = nil; var updates: [AgentUpdate]? = nil; var agentDraft: String? = nil
+}
+struct JobStatus: Decodable {
+    struct Run: Decodable {
+        struct Draft: Decodable { var summary: String?; var questions: [String]? }
+        var id: String; var status: String; var error: String?; var draft: Draft?
+    }
+    var run: Run; var phase: String
+}
 struct RPCError: Codable { let message: String }
 struct Envelope<T: Decodable>: Decodable { let ok: Bool; let value: T?; let error: RPCError?; let revision: Int? }
 struct JobID: Decodable { let id: String }

@@ -26,5 +26,8 @@ output/
 **/.vercel/
 **/DerivedData/
 **/xcuserdata/
+**/.build/
+apps/apple/*.xcodeproj/
+apps/apple/*.xcworkspace/
 *.tsbuildinfo
 apps/web/public/mobile.css
