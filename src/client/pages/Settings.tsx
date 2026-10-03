@@ -1,4 +1,5 @@
 import { CourseCalendarEditor } from '../ui/CourseCalendarEditor.tsx'
+import { CloudConnection } from '../ui/CloudConnection.tsx'
 import { useRef, useState } from 'react'
 import { formatHm, parseHm } from '../../clock.ts'
 import type {
@@ -161,6 +162,7 @@ export function SettingsPage({ t, state, runtime }: PageProps): JSX.Element {
         }}>{title}</button>)}
       </div>
       <div className="dp-settings">
+        <CloudConnection runtime={runtime} />
         <Section title="个性化与弹性计划">
           <label className="dp-label" htmlFor="dp-personal-context">长期目标、偏好与生活约束</label>
           <DraftInput id="dp-personal-context" value={settings.personalContext} onCommit={(value) => patchSettings({ personalContext: value })} placeholder="例如：英语和论文优先，上午适合深度学习，周末希望留时间给家人。" />

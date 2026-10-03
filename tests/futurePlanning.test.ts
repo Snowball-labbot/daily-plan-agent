@@ -99,12 +99,38 @@ test('a review can record past facts and arrange future activities in the same s
 test('future actual logs, unsupported evidence and out-of-window events cannot be applied', async () => {
   const { service, ctx } = await fixture()
   ctx.reply = JSON.stringify({ summary: '错误的实绩', activityLogs: [{ date: '2026-10-02', title: '聚餐完成', lifeArea: 'relationships', evidence: '明天聚餐' }] })
-  await assert.rejects(service.workflowRun({ text: '明天聚餐', mode: 'plan', apply: true }), /实际执行日期/)
+  const future = await service.workflowRun({ text: '明天聚餐', mode: 'plan', apply: true })
+  assert.equal(future.run.status, 'applied')
+  assert.equal(service.dayPlan('2026-10-02').observations?.length ?? 0, 0)
   ctx.reply = JSON.stringify({ summary: '没有原文依据', appointments: [appointment()] })
-  await assert.rejects(service.workflowRun({ text: '安排明天', mode: 'plan', apply: true }), /原文依据/)
+  const unsupported = await service.workflowRun({ text: '安排明天', mode: 'plan', apply: true })
+  assert.equal(unsupported.run.status, 'applied')
+  assert(unsupported.run.applyWarnings?.some((warning) => warning.includes('原文')))
   ctx.reply = JSON.stringify({ summary: '不在所选日期', appointments: [appointment()] })
-  await assert.rejects(service.workflowRun({ text: '明天09:10–10:05和朋友聚餐', mode: 'plan', planStart: '2026-10-05', planEnd: '2026-10-11', apply: true }), /展望范围/)
+  await assert.rejects(service.workflowRun({ text: '明天09:10–10:05和朋友聚餐', mode: 'plan', planStart: '2026-10-05', planEnd: '2026-10-11', apply: true }), /不在本次安排日期/)
   assert.equal(service.dayPlan('2026-10-02').blocks.length, 0)
+})
+
+test('out-of-range errors identify the event and selected dates before any personal data changes', async () => {
+  const { service, ctx } = await fixture()
+  const before = service.exportAll()
+  ctx.reply = JSON.stringify({ summary: '日期不符', appointments: [appointment()], tasks: [{ title: '新论文', category: 'study' }] })
+  const { run } = await service.workflowRun({ text: appointment().evidence, mode: 'plan', planStart: '2026-10-05', planEnd: '2026-10-11' })
+  await assert.rejects(service.workflowApply(run.id), /「朋友聚餐」在 2026-10-02.*2026-10-05 至 2026-10-11/)
+  const after = service.exportAll()
+  assert.deepEqual(after.plans, before.plans)
+  assert.deepEqual(after.backlog, before.backlog)
+  assert.equal(service.workflowStatus(run.id).run.status, 'ready')
+})
+
+test('a passed start reports its actual time rather than calling it an out-of-range date', async () => {
+  const { service, ctx } = await fixture()
+  const event = { ...appointment('2026-10-01'), evidence: '今天09:10–10:05和朋友聚餐' }
+  ctx.reply = JSON.stringify({ summary: '今天聚餐', appointments: [event] })
+  const { run } = await service.workflowRun({ text: event.evidence, mode: 'plan', planStart: event.date, planEnd: event.date })
+  ;(service as any).now = () => new Date('2026-10-01T01:15:00Z')
+  await assert.rejects(service.workflowApply(run.id), /09:10 已过去；现在是 2026-10-01 09:15/)
+  assert.equal(service.dayPlan(event.date).blocks.length, 0)
 })
 
 test('a past unconfirmed appointment stays on its date instead of being carried to a new party', async () => {

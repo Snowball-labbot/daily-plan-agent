@@ -1,0 +1,30 @@
+name: Apple companion checks
+on:
+  push:
+    branches: [main, feat/cloud-mobile-sync]
+    paths: ['apps/apple/**', '.github/workflows/apple.yml']
+  pull_request:
+    paths: ['apps/apple/**', '.github/workflows/apple.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: apple-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  compile:
+    runs-on: macos-15
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/apple
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test offline journal and account isolation
+        run: swift test
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Compile iPhone and embedded Watch without signing
+        run: xcodebuild -project DailyPlan.xcodeproj -scheme DailyPlan -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build

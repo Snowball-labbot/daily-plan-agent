@@ -1,8 +1,9 @@
 {
   "name": "@dsh-external/dsh-daily-plan",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "Personalized rolling planning with capacity buffers, linked learning and fitness, daily feedback and weekly reviews, as a native DSH overlay.",
   "type": "module",
+  "packageManager": "pnpm@11.24.0",
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
   "exports": {
@@ -53,7 +54,11 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "backup": "node --import tsx scripts/backup.ts",
+    "web:dev": "pnpm --filter @daily-plan/web dev",
+    "web:build": "pnpm --filter @daily-plan/web build",
+    "cloud:provision": "node scripts/provision-cloud.mjs"
   },
   "dependencies": {
     "zod": "^4.1.5"
@@ -67,6 +72,7 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.0.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.5",

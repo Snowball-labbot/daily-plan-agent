@@ -71,8 +71,33 @@ export function repairUnescapedStringQuotes(input: string): string {
   return out
 }
 
+/** Model output sometimes contains zero-width separators between JSON fields. */
+export function stripJsonInvisibleWhitespace(input: string): string {
+  let output = '', inString = false
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index]!
+    if (inString && char === '\\') { output += char + (input[++index] ?? ''); continue }
+    if (char === '"') inString = !inString
+    if (!inString && /[\u200b-\u200d\u2060\ufeff]/u.test(char)) continue
+    output += char
+  }
+  return output
+}
+
 export function stripTrailingCommas(input: string): string {
-  return input.replace(/,\s*([}\]])/gu, '$1')
+  let output = '', inString = false
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index]!
+    if (inString && char === '\\') { output += char + (input[++index] ?? ''); continue }
+    if (char === '"') inString = !inString
+    if (!inString && char === ',') {
+      let next = index + 1
+      while (/\s/u.test(input[next] ?? '') && next < input.length) next++
+      if (input[next] === '}' || input[next] === ']') continue
+    }
+    output += char
+  }
+  return output
 }
 
 const CATEGORY_ALIASES: Record<string, string> = {

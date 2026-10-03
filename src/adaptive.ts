@@ -26,7 +26,7 @@ export function personalSignals(plans: readonly DayPlanRecord[], reviews: readon
     .filter((blocks) => blocks.length > 0)
   const planned = samples.flat().reduce((sum, block) => sum + block.endMinute - block.startMinute, 0)
   const completed = samples.flat().filter((block) => block.done)
-    .reduce((sum, block) => sum + block.endMinute - block.startMinute, 0)
+    .reduce((sum, block) => sum + (block.endMinute - block.startMinute) * (block.completionProgress === undefined ? 1 : block.completionProgress / 100), 0)
   const rate = planned === 0 ? null : completed / planned
   const energies = reviews.filter((review) => review.date < before && review.status === 'structured')
     .slice(-7).flatMap((review) => review.structured?.energy == null ? [] : [review.structured.energy])

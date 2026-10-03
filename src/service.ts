@@ -1,5 +1,5 @@
 import { courseWeekday } from './calendar.ts'
-import { normalizeAppointmentEvidence, fitEstimatedAppointments } from './appointmentEvidence.ts'
+import { normalizeAppointmentEvidence } from './appointmentEvidence.ts'
 import { courseColor } from './plan.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import {
@@ -192,6 +192,7 @@ export class DailyPlanService {
   private settingsCache: SettingsRecord | undefined
   private readonly reviewJobs = new Map<string, AbortController>()
   private readonly coachJobs = new Map<string, AbortController>()
+  private readonly startedJobs = new Map<string, AbortController>()
   private allocationQueue: Promise<unknown> = Promise.resolve()
 
   private constructor(
@@ -385,6 +386,9 @@ export class DailyPlanService {
       colorKey: input.colorKey ?? existing?.colorKey ?? poolItem?.colorKey ?? '',
       done: existing?.done ?? false,
       doneAt: existing?.doneAt ?? null,
+      completionEvidence: existing?.completionEvidence,
+      completionProgress: existing?.completionProgress,
+      executionNote: existing?.executionNote,
       carriedFrom: existing?.carriedFrom ?? null,
       note: input.note ?? existing?.note ?? '',
       adaptive: false,
@@ -421,16 +425,31 @@ export class DailyPlanService {
     const current = this.dayPlan(date)
     const blocks = current.blocks.map((block) =>
       block.id === blockId
-        ? { ...block, done, executionStatus: done ? 'completed' as const : 'unknown' as const, doneAt: done ? new Date().toISOString() : null }
+        ? { ...block, done, executionStatus: done ? (block.completionProgress !== undefined && block.completionProgress < 100 ? 'partial' as const : 'completed' as const) : 'unknown' as const, doneAt: done ? new Date().toISOString() : null }
         : block,
     )
     const saved = await this.saveDay({ ...current, blocks })
     const target = blocks.find((block) => block.id === blockId)
     if (target?.backlogId) {
       const item = this.table('backlog').get(target.backlogId)
-      if (item) await this.table('backlog').put(item.id, { ...item, done, state: done ? 'completed' : 'scheduled' })
+      const complete = done && (target.completionProgress === undefined || target.completionProgress === 100)
+      if (item) await this.table('backlog').put(item.id, { ...item, done: complete, state: complete ? 'completed' : 'scheduled' })
     }
     return saved
+  }
+
+  async feedbackBlock(date: string, blockId: string, input: unknown): Promise<DayPlanRecord> {
+    DateSchema.parse(date)
+    if(date > this.todayIso()) throw new Error('执行备注只能记录今天或过去的事项')
+    const raw=input as {note?:unknown;progress?:unknown;done?:unknown}
+    if(!raw || typeof raw.note !== 'string' || raw.note.length>2000) throw new Error('备注应在 2000 字以内')
+    if(raw.progress!==null && raw.progress!==undefined && (typeof raw.progress!=='number'||!Number.isInteger(raw.progress)||raw.progress<0||raw.progress>100)) throw new Error('完成度应在 0–100% 之间')
+    if(raw.done!==undefined&&typeof raw.done!=='boolean')throw new Error('打卡状态无效')
+    const current=this.dayPlan(date), target=current.blocks.find(block=>block.id===blockId)
+    if(!target)throw new Error('找不到这项安排，请刷新后再记')
+    const progress=raw.progress as number|null|undefined, done=raw.done as boolean|undefined ?? target.done
+    await this.saveDay({...current,blocks:current.blocks.map(block=>block.id===blockId?{...block,executionNote:raw.note as string,completionProgress:progress??undefined}:block)})
+    return this.toggleBlock(date,blockId,done)
   }
 
   async moveBlock(
@@ -1127,8 +1146,9 @@ export class DailyPlanService {
         rawText: existing.raw.text,
         usedPrompts: existing.raw.usedPrompts,
         snapshot: this.daySnapshot(date),
-        completedTitles: counted.filter((block) => block.done).map((block) => block.title),
-        openTitles: counted.filter((block) => !block.done && flexibleBlock(block)).map((block) => `${block.title} (id: ${block.id})`),
+        completedTitles: counted.filter((block) => block.done && (block.completionProgress===undefined||block.completionProgress===100)).map((block) => block.title),
+        openTitles: counted.filter((block) => (!block.done||block.completionProgress!==undefined&&block.completionProgress<100) && flexibleBlock(block)).map((block) => `${block.title} (id: ${block.id})`),
+        executionFeedback: counted.filter(block=>block.executionNote||block.completionProgress!==undefined).map(block=>({title:block.title,checked:block.done,progress:block.completionProgress,note:block.executionNote??''})),
         personalContext: JSON.stringify(this.workflowContext(isoWeekKey(parseIsoDate(date)))),
         upcoming: this.upcomingContext(date, 7),
         periods: this.periods().map((period) => ({
@@ -1496,7 +1516,38 @@ export class DailyPlanService {
     })
   }
 
-  async workflowRun(input: { text: string; mode: WorkflowRunRecord['mode']; weekKey?: string; apply?: boolean; signal?: AbortSignal; rangeStart?: string; rangeEnd?: string; planStart?: string; planEnd?: string; replaceConflicts?: boolean }) {
+  async workflowStart(input: { text: string; mode: WorkflowRunRecord['mode']; weekKey?: string; apply?: boolean; rangeStart?: string; rangeEnd?: string; planStart?: string; planEnd?: string; replaceConflicts?: boolean; clientRequestId?: string }) {
+    const id = input.clientRequestId ? `coach_${stableHash(input.clientRequestId)}` : newId('coach')
+    if (this.table('workflow_runs').get(id)) return { id }
+    const controller = new AbortController()
+    this.startedJobs.set(id, controller)
+    let resolve!: () => void, reject!: (error: unknown) => void
+    const started = new Promise<void>((yes, no) => { resolve = yes; reject = no })
+    void this.workflowRun({ ...input, runId: id, signal: controller.signal, onStarted: resolve }).catch(async (error) => {
+      reject(error)
+      const run = this.table('workflow_runs').get(id)
+      if (run) await this.table('workflow_runs').put(id, { ...run, status: run.draft ? 'ready' : 'failed', phase: run.draft ? 'ready' : 'failed', error: String(error instanceof Error ? error.message : error) })
+    }).finally(() => { this.startedJobs.delete(id) }).catch(() => undefined)
+    await started
+    return { id }
+  }
+
+  workflowStatus(id: string) {
+    const run = this.table('workflow_runs').get(id) as WorkflowRunRecord | undefined
+    if (!run) throw new Error('没有找到这一份安排')
+    return { run, phase: run.phase ?? (run.status === 'running' ? 'generating' : run.status), allocation: null }
+  }
+
+  async workflowCancel(id: string) {
+    const controller = this.startedJobs.get(id)
+    const run = this.table('workflow_runs').get(id) as WorkflowRunRecord | undefined
+    if (run?.status !== 'running') return this.workflowStatus(id)
+    controller?.abort()
+    if (run) await this.table('workflow_runs').put(id, { ...run, status: 'failed', phase: 'cancelled', error: '已停止整理，原文已保留。' })
+    return this.workflowStatus(id)
+  }
+
+  async workflowRun(input: { text: string; mode: WorkflowRunRecord['mode']; weekKey?: string; apply?: boolean; signal?: AbortSignal; rangeStart?: string; rangeEnd?: string; planStart?: string; planEnd?: string; replaceConflicts?: boolean; runId?: string; onStarted?: () => void }) {
     const date = this.todayIso()
     const weekKey = input.weekKey ?? isoWeekKey(parseIsoDate(date))
     const weekEnd = weekDates(weekKey)[6] as string
@@ -1516,11 +1567,12 @@ export class DailyPlanService {
     if (input.signal?.aborted) controller.abort()
     this.coachJobs.set(key, controller)
     const stamp = new Date().toISOString()
-    let run = WorkflowRunSchema.parse({ id: newId('coach'), date, weekKey, mode: input.mode, rawText: input.text,
-      status: 'running', createdAt: stamp, updatedAt: stamp, rangeStart, rangeEnd, planStart, planEnd,
+    let run = WorkflowRunSchema.parse({ id: input.runId ?? newId('coach'), date, weekKey, mode: input.mode, rawText: input.text, inputText: input.text,
+      status: 'running', phase: 'generating', createdAt: stamp, updatedAt: stamp, rangeStart, rangeEnd, planStart, planEnd,
       ...(input.replaceConflicts !== undefined ? { replaceConflicts: input.replaceConflicts } : {}) })
     try {
       await this.table('workflow_runs').put(run.id, run)
+      input.onStarted?.()
       const settings = this.settings()
       const planningDays = Array.from({ length: Math.round((parseIsoDate(planEnd).getTime() - parseIsoDate(planStart).getTime()) / 86400000) + 1 }, (_, index) => {
         const day = this.dayPlan(isoDate(addDays(parseIsoDate(planStart), index)))
@@ -1529,25 +1581,61 @@ export class DailyPlanService {
         return { ...day, blocks: [...day.blocks, ...skeleton.filter((block) => !day.blocks.some((existing) => existing.id === block.id))] }
       })
       const result = await runCoach(this.ctx, { date, weekKey, mode: input.mode, text: input.text,
+        appointmentPlanning: { date, minute: this.currentMinute(), replaceConflicts: input.replaceConflicts === true, days: planningDays,
+          minMinute: Math.min(...this.periods().map((period) => period.startMinute)),
+          maxMinute: Math.max(...this.periods().filter((period) => period.index <= this.dayEndPeriod()).map((period) => period.endMinute)) },
         context: { ...this.workflowContext(weekKey), upcomingDays: undefined, latestConversation: undefined, replaceConflicts: input.replaceConflicts === true, reviewDays: Array.from({ length: Math.round((parseIsoDate(rangeEnd).getTime() - parseIsoDate(rangeStart).getTime()) / 86400000) + 1 },
           (_, index) => this.dayPlan(isoDate(addDays(parseIsoDate(rangeStart), index)))),
           planningDays, currentMinute: this.currentMinute() }, rangeStart, rangeEnd, planStart, planEnd,
         provider: settings.agnes.provider, model: settings.agnes.model,
         agentPreset: settings.agnes.agentPreset, timeoutMs: settings.agnes.timeoutMinutes * 60_000,
         workspacePath: this.config.workspacePath, signal: controller.signal })
-      run = WorkflowRunSchema.parse({ ...run, status: result.ok ? 'ready' : 'failed', draft: result.ok ? fitEstimatedAppointments(normalizeAppointmentEvidence(result.value), {
-          date, minute: this.currentMinute(), replaceConflicts: input.replaceConflicts === true, days: planningDays,
-          minMinute: Math.min(...this.periods().map((period) => period.startMinute)),
-          maxMinute: Math.max(...this.periods().filter((period) => period.index <= this.dayEndPeriod()).map((period) => period.endMinute)),
-        }) : null,
-        error: result.ok ? null : result.message, updatedAt: new Date().toISOString() })
+      run = WorkflowRunSchema.parse({ ...run, status: result.ok && !controller.signal.aborted ? 'ready' : 'failed', phase: controller.signal.aborted ? 'cancelled' : result.ok ? 'ready' : 'failed', draft: result.ok && !controller.signal.aborted ? normalizeAppointmentEvidence(result.value) : null,
+        error: controller.signal.aborted ? '已停止整理，原文已保留。' : result.ok ? null : result.message, updatedAt: new Date().toISOString() })
+      if (run.draft) run = this.supportedWorkflow(run)
       await this.table('workflow_runs').put(run.id, run)
-      if (result.ok && input.apply === true && !controller.signal.aborted) return this.workflowApply(run.id)
+      if (result.ok && input.apply === true && !controller.signal.aborted) return await this.workflowApply(run.id)
       return { run, allocation: null }
     } finally {
       input.signal?.removeEventListener('abort', onAbort)
       this.coachJobs.delete(key)
     }
+  }
+
+  /** Keep valid intentions usable without weakening evidence checks for actual facts. */
+  private supportedWorkflow(run: WorkflowRunRecord): WorkflowRunRecord {
+    const draft = structuredClone(run.draft!)
+    const warnings = [...(run.applyWarnings ?? [])]
+    const warn = (message: string) => { if (!warnings.includes(message)) warnings.push(message) }
+    if (!run.factsApplied) {
+      const fields = ['taskActions', 'executions', 'learningLogs', 'activityLogs', 'gymLogs'] as const
+      for (const field of fields) {
+        const accepted: any[] = [], seen = new Set<string>()
+        for (const entry of draft[field]) {
+          const evidence = entry.evidence?.trim()
+          const key = 'taskId' in entry ? entry.taskId : 'blockId' in entry ? `${entry.date}:${entry.blockId}` : JSON.stringify(entry)
+          const candidate: any = { ...draft, taskActions: [], executions: [], learningLogs: [], activityLogs: [], gymLogs: [], [field]: [entry] }
+          try {
+            if (!evidence || !run.rawText.includes(evidence)) throw new Error('缺少本次原文依据')
+            if (field !== 'taskActions' && /打算|准备|计划|明天|下周|想去|可能去/.test(evidence) && !/完成|做完|练完|结束|读了|练了|做了|写完|去了|吃了/.test(evidence)) throw new Error('描述的是计划，不能记为已完成')
+            if (seen.has(key)) throw new Error('重复记录')
+            this.validateWorkflowFacts({ ...run, draft: candidate })
+            seen.add(key); accepted.push(entry)
+          } catch (error) { warn(`未补记${'title' in entry ? `「${entry.title}」` : '一项记录'}：${error instanceof Error ? error.message : String(error)}。有效安排仍可应用。`) }
+        }
+        ;(draft as any)[field] = accepted
+      }
+    }
+    draft.appointments = draft.appointments.filter((event) => {
+      if (event.evidence.trim() && run.rawText.includes(event.evidence)) return true
+      const sources = [...this.table('workflow_runs').entries()] as [string, WorkflowRunRecord][]
+      const source = sources.map(([, value]) => value).find((value) => value.id !== run.id && value.date === event.date && event.evidence.trim() && value.rawText.includes(event.evidence))
+      const withdrawn = this.dayPlan(event.date).blocks.some((block) => block.title.trim() === event.title.trim() && block.appointment && !activeBlock(block))
+      if (source && !withdrawn) { event.sourceRunId = source.id; return true }
+      warn(`未新增「${event.title}」：没有可核验的用户原文，或旧安排已撤回。`)
+      return false
+    })
+    return { ...run, draft, applyWarnings: warnings }
   }
 
   private validateWorkflowFacts(run: WorkflowRunRecord): void {
@@ -1617,6 +1705,7 @@ export class DailyPlanService {
     const done = status === 'completed'
     await this.saveDay({ ...day, blocks: day.blocks.map((entry) => entry.id === blockId ? {
       ...entry, done, doneAt: done ? entry.doneAt ?? new Date().toISOString() : null, executionStatus: status, completionEvidence: evidence,
+      ...(done && entry.completionProgress !== undefined ? { completionProgress:100 } : {}),
     } : entry) })
     const taskId = block.backlogId ?? `missed_${stableHash(`${date}:${block.id}`)}`
     const task = this.table('backlog').get(taskId) as BacklogItemRecord | undefined
@@ -1867,8 +1956,10 @@ export class DailyPlanService {
       if (run.status === 'applied') return { run, allocation: null }
       if (run.status !== 'ready') throw new Error('这一轮尚未完成')
       if (run.date !== this.todayIso()) throw new Error('这份建议已跨天，请根据今天的情况重新整理')
-      const draft = run.intentApplied ? run.draft : normalizeAppointmentEvidence(run.draft)
-      run = { ...run, draft, replaceConflicts: replaceConflicts ?? run.replaceConflicts ?? false }
+      run = this.supportedWorkflow(run)
+      const draft = run.intentApplied ? run.draft! : normalizeAppointmentEvidence(run.draft!)
+      run = { ...run, draft, phase: 'applying', error: null, replaceConflicts: replaceConflicts ?? run.replaceConflicts ?? false }
+      await this.table('workflow_runs').put(id, run)
       const replacements = new Map<string, { date: string; block: PlanBlockRecord }>()
       const handleConflict = (date: string, title: string, block: PlanBlockRecord): void => {
         const completingNow = draft.executions.some((entry) => entry.date === date && entry.blockId === block.id && entry.status === 'completed') ||
@@ -1896,9 +1987,12 @@ export class DailyPlanService {
       const planStart = run.planStart ?? this.todayIso()
       const planEnd = run.planEnd ?? isoDate(addDays(parseIsoDate(this.todayIso()), 13))
       const appointments = (run.intentApplied ? [] : draft.appointments).map((event) => {
-        if (!run.rawText.includes(event.evidence)) throw new Error('未来活动缺少当前输入的原文依据，请重新整理')
-        if (event.date < planStart || event.date > planEnd || event.date < this.todayIso() ||
-          (event.date === this.todayIso() && event.startMinute < this.currentMinute())) throw new Error('未来活动超出展望范围，或开始时间已过去，请调整范围或重新整理')
+        const sourceText = event.sourceRunId ? this.table('workflow_runs').get(event.sourceRunId)?.rawText : run.rawText
+        if (!event.evidence.trim() || !sourceText?.includes(event.evidence)) throw new Error('未来活动缺少可核验的原文依据，请重新整理')
+        if (event.date < planStart || event.date > planEnd) throw new Error(`「${event.title}」在 ${event.date}，不在本次安排日期 ${planStart} 至 ${planEnd} 内。请修改该项日期，或按最新描述重新整理。`)
+        if (event.date < this.todayIso() || (event.date === this.todayIso() && event.startMinute < this.currentMinute())) {
+          throw new Error(`「${event.title}」的开始时间 ${event.date} ${formatHm(event.startMinute)} 已过去；现在是 ${this.todayIso()} ${formatHm(this.currentMinute())}。请修改该项时间，或重新整理剩余安排。`)
+        }
         const periods = this.periods().filter((period) => period.index <= this.dayEndPeriod())
         if (event.startMinute < Math.min(...periods.map((p) => p.startMinute)) || event.endMinute > Math.max(...periods.map((p) => p.endMinute))) {
           throw new Error(`${event.date} 的活动超出当前日程显示时段，请先在设置中扩展作息时间`)
@@ -1939,6 +2033,7 @@ export class DailyPlanService {
         for (const conflict of conflicts) handleConflict(window.date, window.reason, conflict)
       }
       const feedback = run.factsApplied ? { changes: run.appliedChanges ?? [], warnings: run.applyWarnings ?? [] } : await this.applyWorkflowFacts(run)
+      feedback.warnings = [...new Set([...(run.applyWarnings ?? []), ...feedback.warnings])]
       await this.table('workflow_runs').put(id, { ...run, factsApplied: true, appliedChanges: feedback.changes, applyWarnings: feedback.warnings })
       for (const { date, block } of replacements.values()) {
         const current = this.dayPlan(date).blocks.find((existing) => existing.id === block.id)
@@ -2019,10 +2114,14 @@ export class DailyPlanService {
         const day = this.dayPlan(date)
         if (date >= this.todayIso()) await this.saveDay({ ...day, focus: draft.focus.join('；') })
       }
-      const next = WorkflowRunSchema.parse({ ...run, status: 'applied', factsApplied: true, intentApplied: true,
+      const next = WorkflowRunSchema.parse({ ...run, status: 'applied', phase: 'applied', factsApplied: true, intentApplied: true,
         appliedChanges: feedback.changes, applyWarnings: feedback.warnings, updatedAt: new Date().toISOString() })
       await this.table('workflow_runs').put(id, next)
       return { run: next, allocation }
+    }).catch(async (error) => {
+      const current = this.table('workflow_runs').get(id)
+      if (current && current.status !== 'applied') await this.table('workflow_runs').put(id, { ...current, phase: 'ready', error: error instanceof Error ? error.message : String(error) })
+      throw error
     })
   }
 

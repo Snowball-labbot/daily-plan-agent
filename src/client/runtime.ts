@@ -162,8 +162,17 @@ export function createRuntime(rpc: ClientRpc): PlanRuntime {
     for (const listener of listeners) listener()
   }
 
-  const call = async <T>(endpoint: string, payload: unknown = {}): Promise<T> =>
-    unwrap<T>(await rpc.call(CHANNEL, endpoint, payload))
+  const call = async <T>(endpoint: string, payload: unknown = {}): Promise<T> => {
+    const controller = new AbortController()
+    const limit = /workflow.run|review.structure|routine.parse|agnes.probe/.test(endpoint) ? 400_000 : 30_000
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const response = await Promise.race([rpc.call(CHANNEL, endpoint, payload, controller.signal), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error('连接等待超时。原文与微调已保留，请恢复安排查看保存状态。')) }, limit)
+      })])
+      return unwrap<T>(response)
+    } finally { if (timer) clearTimeout(timer) }
+  }
 
   /** Wraps every mutation so failures surface instead of vanishing. */
   const run = async (label: string, task: () => Promise<void>): Promise<void> => {

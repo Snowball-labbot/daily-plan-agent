@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { BodyPartValue, CategoryValue, ReviewRecord } from './domain.ts'
 import type { BlockInput, DailyPlanService, RollforwardItem } from './service.ts'
 import { probeAgnes } from './review.ts'
+import type { CloudBridge } from './cloudBridge.ts'
 
 const CHANNEL = '/dsh-daily-plan'
 
@@ -82,21 +83,29 @@ function rollforwardItems(value: unknown): RollforwardItem[] {
   })
 }
 
-export function registerDailyPlanRpc(ctx: Context, service: DailyPlanService): () => unknown {
+export function registerDailyPlanRpc(ctx: Context, service: DailyPlanService, cloud?: CloudBridge): () => unknown {
   return ctx.connection.rpc.handle(
     CHANNEL,
     async (endpoint: string, raw: unknown, signal: AbortSignal): Promise<unknown> => {
       try {
         if (signal?.aborted === true) throw new Error('请求已取消')
         const payload = record(raw)
+        if (cloud && (endpoint.startsWith('cloud.') || cloud.enabled)) return await cloud.call(endpoint,payload,signal)
 
         // ── plan ──────────────────────────────────────────────────────────
         if (endpoint === 'snapshot') {
-          await service.prepareToday()
+          void service.prepareToday().catch(() => undefined)
           return ok(service.snapshot(optStr(payload['date']), optStr(payload['weekKey'])))
         }
         if (endpoint === 'workflow.context') return ok(service.workflowContext(optStr(payload['weekKey'])))
         if (endpoint === 'workflow.history') return ok(service.workflowHistory(optStr(payload['weekKey'])))
+        if (endpoint === 'workflow.status') return ok(service.workflowStatus(str(payload['id'], 'id')))
+        if (endpoint === 'workflow.cancel') return ok(await service.workflowCancel(str(payload['id'], 'id')))
+        if (endpoint === 'workflow.start') {
+          if (!['plan', 'replan', 'weekly', 'review'].includes(String(payload['mode']))) throw new Error('无效的工作流模式')
+          const input: any = { ...payload, text: typeof payload['text'] === 'string' ? payload['text'] : '', apply: bool(payload['apply']) }
+          return ok(await service.workflowStart(input))
+        }
         if (endpoint === 'workflow.run') {
           const mode = payload['mode']
           if (!['plan', 'replan', 'weekly', 'review'].includes(String(mode))) throw new Error('无效的工作流模式')
@@ -150,6 +159,9 @@ export function registerDailyPlanRpc(ctx: Context, service: DailyPlanService): (
               bool(payload['done'], true),
             ),
           )
+        }
+        if (endpoint === 'plan.block.feedback') {
+          return ok(await service.feedbackBlock(str(payload['date'],'date'),str(payload['blockId'],'blockId'),payload))
         }
         if (endpoint === 'plan.block.reorder-day') {
           return ok(

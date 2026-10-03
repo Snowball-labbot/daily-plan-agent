@@ -408,7 +408,7 @@ export function RecordPage({ t, state, runtime }: PageProps): JSX.Element {
                         data-cat={block.category}
                         data-color={block.colorKey === '' ? undefined : block.colorKey}
                       >
-                        <span className="dp-block-title">{block.title}</span>
+                        <span className="dp-block-title">{block.title}{(block.executionNote||block.completionProgress!==undefined)&&<details className="dp-execution-detail"><summary>执行记录{block.completionProgress!==undefined?` · ${block.completionProgress}%`:''}</summary>{block.executionNote&&<p>{block.executionNote}</p>}</details>}</span>
                         <span className="dp-spacer" />
                         <span className="dp-block-meta">{t(`common.category.${block.category}`)}</span>
                       </div>

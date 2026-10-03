@@ -76,8 +76,10 @@ export const PlanBlockSchema = z.object({
   learningRef: z.string().nullable().optional(),
   learningKind: z.enum(['reading', 'practice']).nullable().optional(),
   lifeArea: LifeArea.optional(),
-  executionStatus: z.enum(['unknown', 'missed', 'completed']).optional(),
+  executionStatus: z.enum(['unknown', 'missed', 'completed', 'partial']).optional(),
   completionEvidence: z.string().optional(),
+  completionProgress: z.number().int().min(0).max(100).optional(),
+  executionNote: z.string().max(2000).optional(),
 })
 
 export const DayPlanSchema = z.object({
@@ -432,6 +434,7 @@ export const WorkflowDraftSchema = z.object({
     blockId: z.string().optional(),
     timeBasis: z.enum(['explicit', 'estimated', 'manual']).optional(),
     timeAssumption: z.string().max(500).optional(),
+    sourceRunId: z.string().optional(),
     learningRef: z.string().nullable().default(null),
     learningKind: z.enum(['reading', 'practice']).nullable().default(null),
   }).refine((item) => item.endMinute > item.startMinute)).max(30).default([]),
@@ -491,7 +494,9 @@ export const WorkflowRunSchema = z.object({
   id: z.string(), date: DateSchema, weekKey: z.string(),
   mode: z.enum(['plan', 'replan', 'weekly', 'review']),
   rawText: z.string().max(30_000),
+  inputText: z.string().max(30_000).optional(),
   status: z.enum(['draft', 'running', 'ready', 'failed', 'applied']).default('draft'),
+  phase: z.enum(['generating', 'applying', 'ready', 'applied', 'failed', 'cancelled']).optional(),
   draft: WorkflowDraftSchema.nullable().default(null),
   error: z.string().nullable().default(null),
   createdAt: z.string(), updatedAt: z.string(),

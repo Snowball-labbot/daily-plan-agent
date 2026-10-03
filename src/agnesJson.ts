@@ -8,6 +8,8 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { finalAssistantText, sessionEvents, type SessionEvent } from './sessionLog.ts'
+import type { AgnesJsonOptions, AgnesJsonTurns, AgnesJsonResult } from './agnesJsonTypes.ts'
+export type { AgnesJsonOptions, AgnesJsonTurns, AgnesJsonResult } from './agnesJsonTypes.ts'
 
 /**
  * One throwaway, read-only, tool-less Agnes turn that must return JSON.
@@ -21,31 +23,6 @@ import { finalAssistantText, sessionEvents, type SessionEvent } from './sessionL
  * the reply" drift, and the drift shows up as one feature quietly losing its
  * timeout or its sandbox.
  */
-
-export interface AgnesJsonOptions {
-  readonly provider: string
-  readonly model: string
-  readonly agentPreset: string
-  readonly timeoutMs: number
-  readonly workspacePath: string
-  readonly signal: AbortSignal
-  /** Unique per run — a session log can never be reused. */
-  readonly sessionId: string
-  /** Shown in warnings, e.g. '排固定安排'. */
-  readonly label: string
-}
-
-export interface AgnesJsonTurns<T> {
-  readonly prompt: string
-  /** Prompt for the single retry, given the first parse error. */
-  readonly repair: (message: string) => string
-  /** Must throw on anything it cannot fully trust. */
-  readonly parse: (text: string) => T
-}
-
-export type AgnesJsonResult<T> =
-  | { readonly ok: true; readonly value: T }
-  | { readonly ok: false; readonly code: string; readonly message: string }
 
 function guardReason(name: string): string {
   return `工具 '${name}' 已禁用：这次只做文本整理，不允许读写文件或执行命令。`
@@ -69,6 +46,14 @@ export async function runAgnesJson<T>(
   let timeout: ReturnType<typeof setTimeout> | undefined
   let timedOut = false
   let wakeAbort: () => void = () => undefined
+  const expiresAt = Date.now() + options.timeoutMs
+  const bounded = async <V>(promise: Promise<V>, limit = Math.max(1, expiresAt - Date.now())): Promise<V> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      return await Promise.race([promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Agnes 等待超时，原文已保留。')), limit) }),
+        aborted.then(() => { throw new Error('已取消') })])
+    } finally { if (timer) clearTimeout(timer) }
+  }
   const aborted = new Promise<void>((resolve) => { wakeAbort = resolve })
   const onAbort = (): void => {
     handle?.agent?.cancel({ kind: 'hook', reason: 'daily plan request cancelled' })
@@ -84,7 +69,7 @@ export async function runAgnesJson<T>(
 
   const archive = async (): Promise<void> => {
     try {
-      if (ctx.workspaceRegistry) await ctx.workspaceRegistry.archiveSession(sessionId)
+      if (ctx.workspaceRegistry) await bounded(ctx.workspaceRegistry.archiveSession(sessionId), 2000)
     } catch (error) {
       ctx.logger?.warn?.(`[dsh-daily-plan] 归档${options.label}会话失败：${String(error)}`)
     }
@@ -108,10 +93,10 @@ export async function runAgnesJson<T>(
     }
     handle =
       typeof ctx.agents.withoutInitiator === 'function'
-        ? await ctx.agents.withoutInitiator(() => ctx.agents.create(createOptions))
-        : await ctx.agents.create(createOptions)
+        ? await bounded(ctx.agents.withoutInitiator(() => ctx.agents.create(createOptions)))
+        : await bounded(ctx.agents.create(createOptions))
 
-    await handle.agent.whenIdle()
+    await bounded(handle.agent.whenIdle())
     await archive()
 
     const runTurn = async (prompt: string, limitMs: number): Promise<{ text: string; completed: boolean }> => {
@@ -129,7 +114,7 @@ export async function runAgnesJson<T>(
           timedOut = true
           handle.agent.cancel({ kind: 'hook', reason: `daily plan ${options.label} timeout` })
           resolve()
-        }, limitMs)
+        }, Math.max(1, Math.min(limitMs, expiresAt - Date.now())))
       })
       await Promise.race([idle, deadline, aborted])
       if (timedOut || options.signal.aborted) await boundedIdle()
@@ -138,7 +123,7 @@ export async function runAgnesJson<T>(
         timeout = undefined
       }
       try {
-        if (ctx.sessions) await ctx.sessions.flush(handle.agent.session)
+        if (ctx.sessions) await bounded(ctx.sessions.flush(handle.agent.session), 2000)
       } catch {
         // Flushing is best-effort.
       }
@@ -197,7 +182,7 @@ export async function runAgnesJson<T>(
     options.signal.removeEventListener('abort', onAbort)
     if (timeout !== undefined) clearTimeout(timeout)
     try {
-      await handle?.dispose?.()
+      if (handle?.dispose) await bounded(handle.dispose(), 2000)
     } catch {
       // Disposal is best-effort.
     }

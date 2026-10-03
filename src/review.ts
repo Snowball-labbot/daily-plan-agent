@@ -33,6 +33,7 @@ export interface StructureOptions {
   readonly reading: readonly ContextReading[]
   readonly practice: readonly ContextPractice[]
   readonly personalContext?: string
+  readonly executionFeedback?: readonly { title:string; checked:boolean; progress?:number|undefined; note:string }[] | undefined
   readonly provider: string
   readonly model: string
   readonly agentPreset: string
@@ -88,6 +89,7 @@ export async function structureReview(ctx: Context, options: StructureOptions): 
         reading: options.reading,
         practice: options.practice,
         personalContext: options.personalContext,
+        executionFeedback: options.executionFeedback,
       }),
       repair: buildRepairPrompt,
       parse: (text) => parseStructuredReview(text, options.date).structured,

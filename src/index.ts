@@ -4,6 +4,7 @@ import z from '@deepseek-ai/schemastery'
 import { registerDailyPlanRpc } from './rpc.ts'
 import { DailyPlanService } from './service.ts'
 import { registerDailyPlanTools } from './tools.ts'
+import { CloudBridge } from './cloudBridge.ts'
 
 export const name = 'dsh-daily-plan'
 
@@ -51,6 +52,8 @@ export async function apply(ctx: Context, raw: Config): Promise<void> {
       reviewTimeoutMs: config.reviewTimeoutMinutes * 60_000,
     })
 
+    const cloud = new CloudBridge(service)
+    await cloud.load()
     const toolDisposers = new Map<object, () => void>()
     let removeRpc: () => unknown = () => undefined
     let stopCreated = (): void => undefined
@@ -64,7 +67,7 @@ export async function apply(ctx: Context, raw: Config): Promise<void> {
         if (String(agent.id ?? '').startsWith('dsh-daily-plan-')) return
         const roots = typeof ctx.agents?.roots === 'function' ? ctx.agents.roots() : []
         if (!roots.includes(agent)) return
-        toolDisposers.set(agent, registerDailyPlanTools(service, agent))
+        toolDisposers.set(agent, registerDailyPlanTools(service, agent, cloud))
       }
 
       for (const agent of typeof ctx.agents?.roots === 'function' ? ctx.agents.roots() : []) mount(agent)
@@ -75,7 +78,7 @@ export async function apply(ctx: Context, raw: Config): Promise<void> {
         toolDisposers.delete(agent)
       })
 
-      removeRpc = registerDailyPlanRpc(ctx, service)
+      removeRpc = registerDailyPlanRpc(ctx, service, cloud)
       ctx.logger.info(
         `[dsh-daily-plan] ready · workspace=${config.workspacePath || '<unset>'} model=${config.model}`,
       )
