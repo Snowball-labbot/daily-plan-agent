@@ -1,5 +1,5 @@
 import { courseWeekday } from './calendar.ts'
-import { normalizeAppointmentEvidence, fitEstimatedAppointments } from './appointmentEvidence.ts'
+import { normalizeAppointmentEvidence } from './appointmentEvidence.ts'
 import { courseColor } from './plan.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import {
@@ -1581,17 +1581,16 @@ export class DailyPlanService {
         return { ...day, blocks: [...day.blocks, ...skeleton.filter((block) => !day.blocks.some((existing) => existing.id === block.id))] }
       })
       const result = await runCoach(this.ctx, { date, weekKey, mode: input.mode, text: input.text,
+        appointmentPlanning: { date, minute: this.currentMinute(), replaceConflicts: input.replaceConflicts === true, days: planningDays,
+          minMinute: Math.min(...this.periods().map((period) => period.startMinute)),
+          maxMinute: Math.max(...this.periods().filter((period) => period.index <= this.dayEndPeriod()).map((period) => period.endMinute)) },
         context: { ...this.workflowContext(weekKey), upcomingDays: undefined, latestConversation: undefined, replaceConflicts: input.replaceConflicts === true, reviewDays: Array.from({ length: Math.round((parseIsoDate(rangeEnd).getTime() - parseIsoDate(rangeStart).getTime()) / 86400000) + 1 },
           (_, index) => this.dayPlan(isoDate(addDays(parseIsoDate(rangeStart), index)))),
           planningDays, currentMinute: this.currentMinute() }, rangeStart, rangeEnd, planStart, planEnd,
         provider: settings.agnes.provider, model: settings.agnes.model,
         agentPreset: settings.agnes.agentPreset, timeoutMs: settings.agnes.timeoutMinutes * 60_000,
         workspacePath: this.config.workspacePath, signal: controller.signal })
-      run = WorkflowRunSchema.parse({ ...run, status: result.ok && !controller.signal.aborted ? 'ready' : 'failed', phase: controller.signal.aborted ? 'cancelled' : result.ok ? 'ready' : 'failed', draft: result.ok && !controller.signal.aborted ? fitEstimatedAppointments(normalizeAppointmentEvidence(result.value), {
-          date, minute: this.currentMinute(), replaceConflicts: input.replaceConflicts === true, days: planningDays,
-          minMinute: Math.min(...this.periods().map((period) => period.startMinute)),
-          maxMinute: Math.max(...this.periods().filter((period) => period.index <= this.dayEndPeriod()).map((period) => period.endMinute)),
-        }) : null,
+      run = WorkflowRunSchema.parse({ ...run, status: result.ok && !controller.signal.aborted ? 'ready' : 'failed', phase: controller.signal.aborted ? 'cancelled' : result.ok ? 'ready' : 'failed', draft: result.ok && !controller.signal.aborted ? normalizeAppointmentEvidence(result.value) : null,
         error: controller.signal.aborted ? '已停止整理，原文已保留。' : result.ok ? null : result.message, updatedAt: new Date().toISOString() })
       if (run.draft) run = this.supportedWorkflow(run)
       await this.table('workflow_runs').put(run.id, run)

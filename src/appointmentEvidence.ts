@@ -59,6 +59,11 @@ export function normalizeCoachOutput(input: unknown): unknown {
   if (Array.isArray(value.appointments)) value.appointments = value.appointments.map((item: unknown) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return item
     const event = { ...item } as Record<string, unknown>
+    // JSON numbers quoted by the model have an unambiguous representation.
+    // Restrict this to future clock fields; actual repetitions remain strict.
+    for (const field of ['startMinute', 'endMinute']) {
+      if (typeof event[field] === 'string' && /^\d{1,4}$/u.test(event[field].trim())) event[field] = Number(event[field])
+    }
     const raw = `${event.title ?? ''} ${event.evidence ?? ''}`
     const duration = /饭|餐/u.test(raw) ? 120 : /酒|drink|bar/iu.test(raw) ? 90 : /健身|训练/u.test(raw) ? 75 : 60
     const missingStart = event.startMinute == null
@@ -81,11 +86,13 @@ export function normalizeCoachOutput(input: unknown): unknown {
 }
 
 /** Place estimated intentions in available time; never move an explicit time or fact. */
-export function fitEstimatedAppointments(draft: WorkflowDraft, input: {
+export interface AppointmentPlanningContext {
   date: string; minute: number; replaceConflicts: boolean;
   days: readonly { date: string; blocks: readonly PlanBlockRecord[] }[];
   minMinute: number; maxMinute: number;
-}): WorkflowDraft {
+}
+
+export function fitEstimatedAppointments(draft: WorkflowDraft, input: AppointmentPlanningContext): WorkflowDraft {
   const placed: WorkflowDraft['appointments'] = []
   const fixed = draft.appointments.filter((event) => event.timeBasis !== 'estimated')
   const appointments = draft.appointments.map((event) => {
@@ -116,4 +123,17 @@ export function fitEstimatedAppointments(draft: WorkflowDraft, input: {
     placed.push(next); return next
   })
   return { ...draft, appointments }
+}
+
+/** Feed unresolved estimated times back into model repair before showing a draft. */
+export function validateEstimatedAppointmentWindow(draft: WorkflowDraft, input: AppointmentPlanningContext): void {
+  const hm = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
+  const issues = draft.appointments.flatMap((event, index) => {
+    if (event.timeBasis !== 'estimated') return []
+    const earliest = Math.max(input.minMinute, event.date === input.date ? input.minute : 0)
+    if (event.startMinute >= earliest && event.endMinute <= input.maxMinute) return []
+    return [{ path: ['appointments', index, event.startMinute < earliest ? 'startMinute' : 'endMinute'],
+      message: `「${event.title}」的推算时段 ${hm(event.startMinute)}–${hm(event.endMinute)} 超出当天可安排时间 ${hm(earliest)}–${hm(input.maxMinute)}。请根据原文顺序和 planningDays 重新调整推算时段，避开固定安排；保留用户明确的时间和所有活动意图。容量不足的弹性目标保留在 tasks 并说明取舍，不改变用户作息，也不编造实际完成。` }]
+  })
+  if (issues.length) throw Object.assign(new Error(issues.map(issue => issue.message).join('\n')), { issues })
 }
